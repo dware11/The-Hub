@@ -1,0 +1,25 @@
+# Local environment variables and credentials
+.env
+.env.*
+!.env.local.example
+
+# Dependencies and Next.js build output
+node_modules/
+.next/
+out/
+
+# Local runtime and temporary files
+tmp/
+*.log
+npm-debug.log*
+
+# Local agent/editor state
+.agents/
+.codex/
+.vscode/
+.idea/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
