@@ -1,4 +1,4 @@
-import { getViewer, isAdmin } from '../../../lib/auth';
+import { getViewer, canReview } from '../../../lib/auth';
 import { getPendingQueue } from '../../../lib/adminData';
 import ReviewQueue from './ReviewQueue';
 
@@ -14,13 +14,13 @@ export default async function AdminReviewPage() {
     );
   }
 
-  if (!isAdmin(viewer)) {
+  if (!canReview(viewer)) {
     return (
       <div className="max-w-md mx-auto mt-20 text-center">
-        <h1 className="font-display text-xl text-purple-900 mb-2">Admins only</h1>
+        <h1 className="font-display text-xl text-purple-900 mb-2">CODE review access required</h1>
         <p className="text-sm text-slate">
-          The review queue is restricted to C.O.D.E. admins. If you think this is a mistake, reach out to
-          the C.O.D.E. team.
+          The review queue is restricted to the Platform Admin and active CODE Officers. If you think this is a mistake,
+          contact the CODE committee.
         </p>
       </div>
     );

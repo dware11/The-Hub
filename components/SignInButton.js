@@ -15,7 +15,7 @@ function MicrosoftMark() {
   );
 }
 
-export default function SignInButton({ className, next = '/submit' }) {
+export default function SignInButton({ className, next = '/panther-submit' }) {
   async function handleSignIn() {
     if (isDemoMode) {
       alert('Demo mode — Microsoft sign-in requires Supabase to be configured. See README.');

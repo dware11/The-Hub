@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import { permanentRedirect } from 'next/navigation';
 import { getViewer, isVerifiedContributor } from '../../lib/auth';
 import SignInButton from '../../components/SignInButton';
 import SubmitForm from '../../components/SubmitForm';
 
 export default async function SubmitPage() {
+  permanentRedirect('/panther-submit');
+
   const viewer = await getViewer();
 
   if (!viewer.user) {
