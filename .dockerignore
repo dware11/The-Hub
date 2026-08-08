@@ -1,0 +1,13 @@
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.local.example
+Dockerfile*
+docker-compose*.yml
+docker-compose*.yaml
+C.O.D.E._Engineering_Hub_Senior_Engineering_Audit.md
+README.md
