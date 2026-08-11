@@ -2,3 +2,8 @@ services:
   engineering-hub:
     build:
       dockerfile: Dockerfile.production
+      args:
+        NEXT_PUBLIC_DEMO_MODE: "true"
+    environment:
+      NEXT_PUBLIC_DEMO_MODE: "true"
+      DEMO_MODE: "true"
