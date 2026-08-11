@@ -1,24 +1,2 @@
-import { getEvents } from '../../lib/data';
-import MajorFilter from '../../components/MajorFilter';
-import EventsCalendar from '../../components/EventsCalendar';
-
-export default async function EventsPage({ searchParams }) {
-  const { major } = await searchParams;
-  const events = await getEvents(major);
-
-  return (
-    <div className="pb-16">
-      <div className="mt-9 mb-6 flex justify-between items-end flex-wrap gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-purple-900">Events</h1>
-          <div className="text-sm text-slate mt-1">
-            One shared calendar — college events, org meetings, workshops &amp; more
-          </div>
-        </div>
-        <MajorFilter current={major} />
-      </div>
-
-      <EventsCalendar events={events} />
-    </div>
-  );
-}
+import Link from 'next/link';import {getEvents} from '../../lib/data';import EventsCalendar from '../../components/EventsCalendar';
+export default async function EventsPage(){const events=await getEvents();return <div className="page-wrap"><header className="page-head"><div className="eyebrow">Engineering calendar</div><h1>Events</h1><p>Important dates, College of Engineering programs, student-organization events, and university activity—all in one calendar.</p></header><div className="chip-row"><span className="chip active">All Events</span><span className="chip">Key Dates &amp; Milestones</span><span className="chip">College of Engineering</span><span className="chip">Engineering Student Organizations</span><span className="chip">Campus &amp; University</span></div><EventsCalendar events={events}/><div style={{textAlign:'center',marginTop:24}}><Link className="gold-button" href="/events/all">View all events</Link></div></div>}
