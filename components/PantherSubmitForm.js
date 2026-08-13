@@ -175,6 +175,8 @@ export default function PantherSubmitForm({ viewer }) {
       setFields((current) => ({
         ...current,
         title: result.fields.title || current.title,
+        org: result.fields.organization || current.org,
+        description: result.fields.description || current.description,
         date: result.fields.date || current.date,
         time: result.fields.time || current.time,
         deadline: result.fields.deadline || current.deadline,
@@ -392,6 +394,19 @@ export default function PantherSubmitForm({ viewer }) {
             {parseResult?.warnings?.map((warning) => <Notice key={`${warning.code}-${warning.artifactId || ''}`}>{warning.message}</Notice>)}
             {parseResult?.conflicts?.map((conflict) => <Notice key={conflict.field}>{conflict.message}</Notice>)}
 
+            {parseResult?.source?.processed?.length > 0 && (
+              <div className="border border-line rounded-xl p-4 mb-5 bg-paper">
+                <div className="text-xs font-mono uppercase text-slate mb-2">Source extraction results</div>
+                {parseResult.source.processed.map((source) => (
+                  <div key={source.artifactId} className="text-xs text-slate mt-1">
+                    <strong className="text-purple-900">{source.sourceName}:</strong>{' '}
+                    {source.status === 'processed'
+                      ? `${source.rawText ? 'text detected' : 'no text detected'}${Number.isFinite(source.confidence) ? ` · OCR confidence ${Math.round(source.confidence)}%` : ''}`
+                      : source.status === 'needs_review' ? 'manual review needed' : 'automatic extraction failed'}
+                  </div>
+                ))}
+              </div>
+            )}
             {parseResult?.tags && (
               <div className="border border-line rounded-xl p-4 mb-5 bg-paper">
                 <div className="text-xs font-mono uppercase text-slate mb-2">Suggested classifications — reviewer confirmation required</div>
