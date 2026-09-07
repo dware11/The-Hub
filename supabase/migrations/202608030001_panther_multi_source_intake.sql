@@ -129,12 +129,12 @@ create policy "verified contributors upload intake sources" on storage.objects
 
 create policy "owners and admins read intake sources" on storage.objects
   for select using (
-    bucket_id = 'intake-sources' and (owner_id = auth.uid() or is_admin())
+    bucket_id = 'intake-sources' and (owner_id::text = auth.uid()::text or is_admin())
   );
 
 create policy "owners delete intake sources" on storage.objects
   for delete using (
-    bucket_id = 'intake-sources' and (owner_id = auth.uid() or is_admin())
+    bucket_id = 'intake-sources' and (owner_id::text = auth.uid()::text or is_admin())
   );
 
 create index intake_sessions_submitter_idx on intake_sessions (submitter_id, created_at desc);
