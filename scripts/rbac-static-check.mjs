@@ -13,6 +13,7 @@ const signIn = read('components/SignInButton.js');
 const proxy = read('proxy.js');
 const digestRoute = read('app/api/cron/weekly-digest/route.js');
 const bootstrap = read('supabase/bootstrap/first_super_admin.sql');
+const selfReviewHardening = read('supabase/migrations/20260908184025_prevent_reviewer_self_review.sql');
 
 assert.match(auth, /export function canSubmit[\s\S]*\['super_admin', 'admin', 'reviewer', 'contributor'\]/);
 assert.match(auth, /export function canReview[\s\S]*\['super_admin', 'admin', 'reviewer'\]/);
@@ -74,5 +75,11 @@ for (const required of [
   "'initial_super_admin_bootstrapped'",
 ]) assert.ok(bootstrap.includes(required), `Missing first-super-admin bootstrap control: ${required}`);
 assert.doesNotMatch(bootstrap, /@pvamu\.edu/i);
+
+for (const entryPoint of ['record_review_evidence', 'review_content', 'request_review_correction']) {
+  assert.ok(selfReviewHardening.includes(entryPoint), `Self-review hardening missing entry point: ${entryPoint}`);
+}
+assert.equal((selfReviewHardening.match(/target_submitter_id = actor\.id/g) || []).length, 3);
+assert.equal((selfReviewHardening.match(/Reviewers cannot review or modify review evidence for their own submission/g) || []).length, 3);
 
 console.log('RBAC static checks passed: role matrix, email-auth path, callback allowlist, production guard, migration policies/RPCs, and review path.');

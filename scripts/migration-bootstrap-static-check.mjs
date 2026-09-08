@@ -27,6 +27,7 @@ const expectedOrder = [
   '202609060001_announcement_publication_fields.sql',
   '202609060002_home_spotlight_controls.sql',
   '20260908180317_revoke_public_execute_rls_auto_enable.sql',
+  '20260908184025_prevent_reviewer_self_review.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -51,6 +52,7 @@ const reviewCorrection = readMigration('202609050002_review_correction_rpc.sql')
 const announcementPublication = readMigration('202609060001_announcement_publication_fields.sql');
 const homeSpotlight = readMigration('202609060002_home_spotlight_controls.sql');
 const rlsAutoEnableHardening = readMigration('20260908180317_revoke_public_execute_rls_auto_enable.sql');
+const selfReviewHardening = readMigration('20260908184025_prevent_reviewer_self_review.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -117,5 +119,7 @@ for (const correctionControl of ['request_review_correction', 'Correction reason
 for (const publicationControl of ['add column if not exists category text', 'add column if not exists source_url text', 'add column if not exists published_at timestamptz', 'set_announcement_published_at', 'announcements_category_check']) assert.ok(announcementPublication.includes(publicationControl), `Announcement publication control missing: ${publicationControl}`);
 for (const spotlightControl of ['manage_home_spotlight', 'Only published content can be featured', 'home_spotlight_added', 'spotlight_rank']) assert.ok(homeSpotlight.includes(spotlightControl), `Home spotlight control missing: ${spotlightControl}`);
 for (const hardeningControl of ["to_regprocedure('public.rls_auto_enable()')", 'revoke execute on function public.rls_auto_enable() from public']) assert.ok(rlsAutoEnableHardening.includes(hardeningControl), `RLS auto-enable hardening control missing: ${hardeningControl}`);
+for (const selfReviewControl of ['record_review_evidence', 'review_content', 'request_review_correction', 'target_submitter_id = actor.id', 'Reviewers cannot review or modify review evidence for their own submission']) assert.ok(selfReviewHardening.includes(selfReviewControl), `Self-review hardening control missing: ${selfReviewControl}`);
+assert.equal((selfReviewHardening.match(/target_submitter_id = actor\.id/g) || []).length, 3, 'Every review entry point must enforce the self-review guard');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);
