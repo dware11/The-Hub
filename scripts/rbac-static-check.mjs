@@ -35,7 +35,7 @@ assert.match(digestRoute, /auth !== `Bearer \$\{cronSecret\}`/);
 assert.match(signIn, /auth\/signin/);
 assert.doesNotMatch(signIn, /provider: 'azure'|offline_access|graph|calendar/i);
 assert.match(read('components/EmailSignInForm.js'), /signInWithOtp/);
-assert.match(read('app/auth/confirm/route.js'), /verifyOtp/);
+assert.match(read('app/auth/confirm/verify/route.js'), /verifyOtp/);
 
 for (const required of [
   'auth_user_id uuid',
