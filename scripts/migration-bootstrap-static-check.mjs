@@ -26,6 +26,7 @@ const expectedOrder = [
   '202609050002_review_correction_rpc.sql',
   '202609060001_announcement_publication_fields.sql',
   '202609060002_home_spotlight_controls.sql',
+  '20260908180317_revoke_public_execute_rls_auto_enable.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -49,6 +50,7 @@ const reviewEvidence = readMigration('202609050001_review_verification_evidence_
 const reviewCorrection = readMigration('202609050002_review_correction_rpc.sql');
 const announcementPublication = readMigration('202609060001_announcement_publication_fields.sql');
 const homeSpotlight = readMigration('202609060002_home_spotlight_controls.sql');
+const rlsAutoEnableHardening = readMigration('20260908180317_revoke_public_execute_rls_auto_enable.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -114,5 +116,6 @@ for (const evidenceControl of ['create table if not exists public.review_verific
 for (const correctionControl of ['request_review_correction', 'Correction reason required', "decision='needs_correction'", 'review_correction_requested']) assert.ok(reviewCorrection.includes(correctionControl), `Correction RPC control missing: ${correctionControl}`);
 for (const publicationControl of ['add column if not exists category text', 'add column if not exists source_url text', 'add column if not exists published_at timestamptz', 'set_announcement_published_at', 'announcements_category_check']) assert.ok(announcementPublication.includes(publicationControl), `Announcement publication control missing: ${publicationControl}`);
 for (const spotlightControl of ['manage_home_spotlight', 'Only published content can be featured', 'home_spotlight_added', 'spotlight_rank']) assert.ok(homeSpotlight.includes(spotlightControl), `Home spotlight control missing: ${spotlightControl}`);
+for (const hardeningControl of ["to_regprocedure('public.rls_auto_enable()')", 'revoke execute on function public.rls_auto_enable() from public']) assert.ok(rlsAutoEnableHardening.includes(hardeningControl), `RLS auto-enable hardening control missing: ${hardeningControl}`);
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);
