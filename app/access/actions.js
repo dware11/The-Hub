@@ -1,0 +1,8 @@
+'use server';
+import { revalidatePath } from 'next/cache';
+import { getViewer } from '../../lib/auth';
+import { createServerSupabaseClient, isDemoMode } from '../../lib/supabaseServerClient';
+import { notifyOperationalEvent } from '../../lib/notifications';
+const TYPES=new Set(['student_organization','department','faculty_staff','sponsor_company','alumni','external_organization']);
+const INTENTS=new Set(['one_time','recurring']); const TARGETS=new Set(['opportunity','event','announcement','general']);
+export async function requestContributorAccess(input){const viewer=await getViewer();if(!viewer.user||viewer.role?.status==='active')return{ok:false,error:'An access request is not needed for this account.'};if(!input?.name||!input?.organization||!TYPES.has(input.representationType)||!INTENTS.has(input.intent)||!TARGETS.has(input.target)||String(input.reason||'').trim().length<10)return{ok:false,error:'Complete each required access-request field.'};if(isDemoMode)return{ok:true,demo:true};const supabase=await createServerSupabaseClient();const{error}=await supabase.rpc('request_contributor_access',{p_name:String(input.name).trim(),p_organization_department:String(input.organization).trim(),p_representation_type:input.representationType,p_pvamu_contact_name:String(input.pvamuContactName||'').trim()||null,p_pvamu_contact_email:String(input.pvamuContactEmail||'').trim()||null,p_access_intent:input.intent,p_reason_context:String(input.reason).trim(),p_request_target:input.target});if(error)return{ok:false,error:error.message};void notifyOperationalEvent('new contributor access request');revalidatePath('/admin/committee');return{ok:true};}

@@ -1,9 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, isVerifiedContributor } from '../../lib/auth';
+import { getViewer, canSubmit } from '../../lib/auth';
 import { createServerSupabaseClient, isDemoMode } from '../../lib/supabaseServerClient';
 import { validateSubmission } from '../../lib/validation';
+import { notifyOperationalEvent } from '../../lib/notifications';
 
 const CONTENT_TABLES = Object.freeze({
   opportunity: 'opportunities',
@@ -90,7 +91,7 @@ function validateArtifactMetadata(artifacts) {
 
 async function requireContributor() {
   const viewer = await getViewer();
-  if (!viewer.user || !isVerifiedContributor(viewer)) {
+  if (!viewer.user || !canSubmit(viewer)) {
     throw new Error('You are not authorized to submit content.');
   }
   return viewer;
@@ -228,7 +229,9 @@ export async function finalizeIntakeAction(input) {
     source_text: cleanText(suggestion?.sourceText, 2000) || null,
     provider: cleanText(suggestion?.provider, 100) || 'local',
     parser_version: cleanText(suggestion?.parserVersion, 100) || 'unknown',
-    needs_review: true,
+    confidence: Number.isFinite(suggestion?.confidence) ? Math.max(0, Math.min(100, Math.round(suggestion.confidence))) : null,
+    review_reason: cleanText(suggestion?.reviewReason, 500) || null,
+    needs_review: Boolean(suggestion?.needsReview),
     contributor_value: input.confirmedValues?.[field] ?? null,
     contributor_confirmed_at: new Date().toISOString(),
   }));
@@ -239,6 +242,32 @@ export async function finalizeIntakeAction(input) {
     .update({ state: 'submitted', submitted_at: new Date().toISOString() })
     .eq('id', session.id);
 
+  void notifyOperationalEvent('new submission awaiting review');
   revalidatePath('/admin/review');
   return { ok: true, data: content };
+}
+
+const FEEDBACK_RATINGS = new Set(['accurate', 'minor_edits', 'major_edits', 'failed']);
+const FEEDBACK_ISSUES = new Set(['title', 'date', 'time', 'location', 'organization', 'contact', 'deadline', 'source_link', 'description', 'other']);
+
+export async function saveParserFeedbackAction(input) {
+  try {
+    await requireContributor();
+    if (!FEEDBACK_RATINGS.has(input?.rating)) return { ok: false, error: 'Choose a feedback rating.' };
+    const issueFields = [...new Set(Array.isArray(input?.issueFields) ? input.issueFields : [])];
+    if (issueFields.some((field) => !FEEDBACK_ISSUES.has(field))) return { ok: false, error: 'Choose valid issue fields.' };
+    const note = cleanText(input?.note, 500) || null;
+    if (!input?.intakeSessionId) return { ok: false, error: 'The intake session is missing.' };
+    if (isDemoMode) return { ok: true, demo: true };
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.rpc('save_intake_parser_feedback', {
+      p_intake_session_id: input.intakeSessionId,
+      p_rating: input.rating,
+      p_issue_fields: issueFields,
+      p_note: note,
+    });
+    return error ? { ok: false, error: 'Feedback could not be saved. Your submission is still complete.' } : { ok: true };
+  } catch {
+    return { ok: false, error: 'Feedback could not be saved. Your submission is still complete.' };
+  }
 }

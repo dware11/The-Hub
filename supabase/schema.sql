@@ -1,5 +1,7 @@
--- C.O.D.E. Engineering Hub — database schema
--- Run this in the Supabase SQL editor once your project is created.
+-- C.O.D.E. Engineering Hub — legacy baseline schema reference.
+-- Do not paste this file into the SQL editor for deployment. The authoritative,
+-- ordered deployment history is supabase/migrations/, beginning with
+-- 202607290000_panther_hub_baseline.sql.
 
 -- ============ ROLES ============
 -- Controls who can post/review. Auth itself (who-is-this-person) is
@@ -23,7 +25,11 @@ create table opportunities (
   type text not null, -- Internship, Co-op, Research, Scholarship, Competition, etc.
   paid boolean default false,
   majors text[] default array['All majors'],
+  classifications text[] default array['All classifications'],
+  work_mode text check (work_mode is null or work_mode in ('Remote', 'Hybrid', 'In person')),
+  compensation_type text not null default 'Not specified' check (compensation_type in ('Not specified', 'Paid', 'Funded', 'Unpaid')),
   description text not null,
+  eligibility text,
   deadline date not null,
   location text,
   link text not null,
@@ -34,6 +40,8 @@ create table opportunities (
   submitted_by uuid references user_roles(id),
   status text not null default 'pending' check (status in ('pending', 'published', 'rejected', 'archived')),
   verified boolean default false,
+  is_featured boolean not null default false,
+  spotlight_rank integer check (spotlight_rank is null or spotlight_rank between 1 and 99),
   created_at timestamptz default now()
 );
 
@@ -59,6 +67,8 @@ create table events (
   submitted_by uuid references user_roles(id),
   status text not null default 'pending' check (status in ('pending', 'published', 'rejected')),
   verified boolean default false,
+  is_featured boolean not null default false,
+  spotlight_rank integer check (spotlight_rank is null or spotlight_rank between 1 and 99),
   created_at timestamptz default now()
 );
 
@@ -68,10 +78,15 @@ create table announcements (
   source text not null, -- College of Engineering, C.O.D.E., Career Services, etc.
   title text not null,
   body text not null,
+  category text not null default 'General' check (category in ('College','C.O.D.E.','Department','Academic','Event','Student Organization','General')),
+  source_url text check (source_url is null or source_url ~ '^https?://'),
   pinned boolean default false,
   emailed_this_week boolean default false,
   submitted_by uuid references user_roles(id),
   status text not null default 'pending' check (status in ('pending', 'published', 'rejected')),
+  published_at timestamptz,
+  is_featured boolean not null default false,
+  spotlight_rank integer check (spotlight_rank is null or spotlight_rank between 1 and 99),
   created_at timestamptz default now()
 );
 

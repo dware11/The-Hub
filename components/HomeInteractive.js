@@ -32,7 +32,7 @@ export function RotatingQuotes({ quotes }) {
   }, [quotes.length]);
   const quote = quotes[index];
   return <figure className="legacy-quote">
-    <blockquote>“{quote.text}”</blockquote>
+    <blockquote>{quote.text}</blockquote>
     <figcaption>{quote.author}</figcaption>
     {quotes.length > 1 && <div className="quote-dots">{quotes.map((_, i) => <button key={i} aria-label={'Show quote ' + (i + 1)} className={i === index ? 'active' : ''} onClick={() => setIndex(i)} />)}</div>}
   </figure>;

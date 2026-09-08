@@ -6,12 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:rbac": "node scripts/rbac-static-check.mjs",
+    "test:migrations": "node scripts/migration-bootstrap-static-check.mjs",
+    "test:impact": "node scripts/impact-static-check.mjs",
+    "test:intake": "node scripts/intake-feedback-static-check.mjs",
+    "test:parser": "node --experimental-vm-modules scripts/parser-real-examples-check.mjs",
+    "test:calendar": "node scripts/calendar-ics-static-check.mjs"
+    ,"test:editorial": "node scripts/editorial-filter-static-check.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
-    "next": "14.2.35",
+    "next": "16.3.4",
+    "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tesseract.js": "^5.1.1"
@@ -19,6 +27,7 @@
   "devDependencies": {
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
+    "supabase": "^2.116.0",
     "tailwindcss": "^3.4.13"
   }
 }

@@ -1,1 +1,9 @@
-import {getAnnouncements} from '../../lib/data';export default async function AnnouncementsPage(){const items=await getAnnouncements();return <div className="page-wrap"><header className="page-head"><div className="eyebrow">Verified updates</div><h1>Announcements that matter.</h1><p>Official information from C.O.D.E., the College of Engineering, departments, and verified campus partners.</p></header><div className="card-grid">{items.map(a=><article className="card" key={a.id}><div className="eyebrow">{a.source} · {new Date(a.created_at).toLocaleDateString()}</div><h3>{a.title}</h3><p>{a.body}</p></article>)}</div></div>}
+import { getAnnouncements } from '../../lib/data';
+import EngagementTracker from '../../components/EngagementTracker';
+import AnnouncementsBrowser from '../../components/AnnouncementsBrowser';
+export const metadata = { title: 'Announcements' };
+
+export default async function AnnouncementsPage() {
+  const items = await getAnnouncements();
+  return <div className="page-wrap announcement-editorial"><EngagementTracker contentType="announcement" contentId="announcements-index" action="list_view" /><header className="announcement-intro"><div className="eyebrow">Announcements</div><h1>Stay informed. Stay <em>connected.</em></h1><p>Important updates, news, and notices from the Roy G. Perry College of Engineering and the engineering community.</p></header><AnnouncementsBrowser items={items} /></div>;
+}

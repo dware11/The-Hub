@@ -1,2 +1,17 @@
-import Link from 'next/link';import {getOpportunities} from '../../lib/data';import MajorFilter from '../../components/MajorFilter';
-export default async function OpportunitiesPage({searchParams}){const {major}=await searchParams;const items=await getOpportunities(major);return <div className="page-wrap"><header className="page-head"><div className="eyebrow">Student pathways</div><h1>Find what moves you forward.</h1><p>Internships, research, scholarships, competitions, graduate pathways, and other verified opportunities.</p></header><div className="chip-row"><MajorFilter current={major}/></div><div className="card-grid">{items.map(o=><Link className="card" href={'/opportunities/'+o.id} key={o.id}><div className="eyebrow">{o.type}{o.paid?' · Paid/Funded':''}</div><h3>{o.title}</h3><p>{o.org}</p><small>Deadline {new Date(o.deadline).toLocaleDateString()}</small></Link>)}</div></div>}
+﻿import { getOpportunities } from '../../lib/data';
+import OpportunitiesBrowser from '../../components/OpportunitiesBrowser';
+export const metadata = { title: 'Opportunities' };
+
+export default async function OpportunitiesPage() {
+  const items = await getOpportunities();
+  return (
+    <div className="page-wrap">
+      <header className="page-head editorial-intro">
+        <div className="eyebrow">Opportunities</div>
+        <h1>Find what moves you forward.</h1>
+        <p>Filter verified internships, research, scholarships, co-ops, competitions, and graduate pathways by the details that matter to you.</p>
+      </header>
+      <OpportunitiesBrowser items={items} />
+    </div>
+  );
+}

@@ -1,0 +1,4 @@
+import { getViewer, canReview } from '../../../lib/auth';
+import { getAccessRequests } from '../../../lib/committeeData';
+import CommitteeQueue from './CommitteeQueue';
+export default async function CommitteePage(){const viewer=await getViewer();if(!viewer.user||!canReview(viewer))return <div className="auth-card"><h1>Contributor Approvals access required</h1><p>Only reviewers, administrators, and super administrators can review contributor requests.</p></div>;const requests=await getAccessRequests();return <div className="review-page"><div className="mt-9 mb-6"><h1 className="font-display text-2xl text-purple-900">Contributor Approvals</h1><p className="text-sm text-slate mt-1">Approve or reject contributor access requests. Approval permits submissions; it does not publish content.</p></div><CommitteeQueue requests={requests}/></div>}

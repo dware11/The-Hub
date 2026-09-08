@@ -7,11 +7,17 @@ import { buildDigestEmail } from '../../../../lib/emailTemplate';
 // set on the project -- this checks that so the endpoint can't be spammed
 // by anyone who finds the URL.
 export async function GET(request) {
-  if (process.env.CRON_SECRET) {
-    const auth = request.headers.get('authorization');
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: 'Weekly digest scheduling is not configured' },
+      { status: 503 }
+    );
+  }
+
+  const auth = request.headers.get('authorization');
+  if (auth !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const resendKey = process.env.RESEND_API_KEY;

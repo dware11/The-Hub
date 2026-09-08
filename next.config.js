@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: { ignoreDuringBuilds: true },
+  agentRules: false,
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  turbopack: {
+    root: __dirname,
+  },
 };
 
 module.exports = nextConfig;

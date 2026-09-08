@@ -1,2 +1,16 @@
-import Link from 'next/link';import {getEvents} from '../../lib/data';import EventsCalendar from '../../components/EventsCalendar';
-export default async function EventsPage(){const events=await getEvents();return <div className="page-wrap"><header className="page-head"><div className="eyebrow">Engineering calendar</div><h1>Events</h1><p>Important dates, College of Engineering programs, student-organization events, and university activity—all in one calendar.</p></header><div className="chip-row"><span className="chip active">All Events</span><span className="chip">Key Dates &amp; Milestones</span><span className="chip">College of Engineering</span><span className="chip">Engineering Student Organizations</span><span className="chip">Campus &amp; University</span></div><EventsCalendar events={events}/><div style={{textAlign:'center',marginTop:24}}><Link className="gold-button" href="/events/all">View all events</Link></div></div>}
+import { Suspense } from 'react';
+import { getEvents } from '../../lib/data';
+import EventsCalendarBrowser from '../../components/EventsCalendarBrowser';
+export const metadata = { title: 'Events' };
+
+export default async function EventsPage() {
+  const events = await getEvents();
+  return <div className="events-page">
+    <header className="events-intro editorial-intro">
+      <div className="eyebrow">Events</div>
+      <h1>What’s happening across <em>engineering.</em></h1>
+      <p>Workshops, info sessions, organization meetings, and College events — all in one place.</p>
+    </header>
+    <section className="events-calendar-section" aria-labelledby="calendar-heading"><div className="events-section-title"><div><span>Central Calendar</span><h2 id="calendar-heading">Engineering at a glance.</h2></div><a href="/events/all">View all events <b aria-hidden="true">→</b></a></div><Suspense fallback={<p className="text-sm text-slate" role="status">Loading event filters…</p>}><EventsCalendarBrowser events={events}/></Suspense></section>
+  </div>;
+}

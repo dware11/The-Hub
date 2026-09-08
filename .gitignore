@@ -6,10 +6,13 @@
 # Dependencies and Next.js build output
 node_modules/
 .next/
+.next-*/
 out/
 
 # Local runtime and temporary files
 tmp/
+outputs/
+*.traineddata
 *.log
 npm-debug.log*
 

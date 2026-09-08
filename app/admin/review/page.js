@@ -1,6 +1,9 @@
 import { getViewer, canReview } from '../../../lib/auth';
+import { Suspense } from 'react';
 import { getPendingQueue } from '../../../lib/adminData';
 import ReviewQueue from './ReviewQueue';
+import RecommendationPanel from './RecommendationPanel';
+import { getAnnouncements } from '../../../lib/data';
 
 export default async function AdminReviewPage() {
   const viewer = await getViewer();
@@ -9,7 +12,7 @@ export default async function AdminReviewPage() {
     return (
       <div className="max-w-md mx-auto mt-20 text-center">
         <h1 className="font-display text-xl text-purple-900 mb-2">Sign in required</h1>
-        <p className="text-sm text-slate">Sign in with your PVAMU Microsoft account to reach the review queue.</p>
+        <p className="text-sm text-slate">Sign in with your verified email to reach the review queue.</p>
       </div>
     );
   }
@@ -17,10 +20,10 @@ export default async function AdminReviewPage() {
   if (!canReview(viewer)) {
     return (
       <div className="max-w-md mx-auto mt-20 text-center">
-        <h1 className="font-display text-xl text-purple-900 mb-2">CODE review access required</h1>
+        <h1 className="font-display text-xl text-purple-900 mb-2">Reviewer access required</h1>
         <p className="text-sm text-slate">
-          The review queue is restricted to the Platform Admin and active CODE Officers. If you think this is a mistake,
-          contact the CODE committee.
+          The review queue is restricted to approved C.O.D.E. reviewers and administrators. If you think this is a mistake, reach out to
+          the C.O.D.E. team.
         </p>
       </div>
     );
@@ -30,15 +33,19 @@ export default async function AdminReviewPage() {
   const total = queue.opportunities.length + queue.events.length + queue.announcements.length;
 
   return (
-    <div className="pb-16">
-      <div className="mt-9 mb-6">
-        <h1 className="font-display text-2xl text-purple-900">Review queue</h1>
-        <div className="text-sm text-slate mt-1">
+    <div className="review-page workspace-subpage">
+      <div className="workspace-page-heading">
+        <div>
+          <div className="eyebrow">Workspace review</div>
+          <h1>Review Queue</h1>
+          <p>
           {total} item{total === 1 ? '' : 's'} waiting on a decision — approve publishes it site-wide,
           reject sends it back.
+          </p>
         </div>
       </div>
-      <ReviewQueue queue={queue} />
+      <Suspense fallback={<p className="text-sm text-slate" role="status">Loading review filters…</p>}><ReviewQueue queue={queue} /></Suspense>
+      <RecommendationPanel announcements={await getAnnouncements()} />
     </div>
   );
 }

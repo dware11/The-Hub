@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const helper = fs.readFileSync('lib/announcementPriority.js', 'utf8');
+const page = fs.readFileSync('components/AnnouncementsBrowser.js', 'utf8');
+assert.match(helper, /university_leadership/);
+assert.match(helper, /college_leadership/);
+assert.match(helper, /code_leadership/);
+assert.match(helper, /campus_organization/);
+assert.match(helper, /leadership: 'University Leadership'/);
+assert.match(page, /Search announcements/);
+assert.match(page, /<span>Source<\/span><select value=\{source\}/);
+assert.match(page, /items\.map\(item => item\.source\)/);
+assert.match(page, /item\.source === source/);
+assert.match(page, /No matching announcements/);
+assert.match(fs.readFileSync('lib/data.js', 'utf8'), /expires_at/);
+console.log('Announcement priority, search, source filter, empty state, and expiry checks passed.');

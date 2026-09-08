@@ -5,14 +5,14 @@ Engineering at Prairie View A&M University — opportunities (internships,
 scholarships, research), a shared events calendar, announcements, and a
 submission portal for verified contributors.
 
-Runs in **demo mode** with zero configuration (sample data, a simulated
-signed-in admin, everything walkable) and switches to live Supabase data
-automatically once the env vars below are set.
+Runs in **demo mode only when both demo flags are explicitly enabled**
+(sample data and a simulated signed-in admin). Production must set both
+flags to false and provide live Supabase configuration.
 
 ## Stack
 
 - Next.js 14 (App Router) + Tailwind CSS
-- Supabase: Postgres + Row Level Security, Auth (Microsoft/Azure AD),
+- Supabase: Postgres + Row Level Security, passwordless email Auth,
   Storage (flyer uploads)
 - Tesseract.js for client-side flyer OCR, plain regex for field extraction
 - Resend for the weekly digest email
@@ -22,8 +22,11 @@ automatically once the env vars below are set.
 ## 1. Supabase project
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open the SQL editor and run all of `supabase/schema.sql`. This creates
-   the tables, the `flyers` storage bucket, and all RLS policies —
+2. For a new empty project, link the Supabase CLI and run `supabase db push`.
+   The ordered history in `supabase/migrations` begins with a complete
+   baseline migration, so `supabase/schema.sql` must not be pasted into the
+   SQL Editor first. The migration chain creates the tables, storage buckets,
+   functions, triggers, and RLS policies —
    including the `is_admin()` / `is_verified_contributor()` checks that
    gate submissions and the review queue at the database level (not just
    in the UI).
@@ -31,22 +34,15 @@ automatically once the env vars below are set.
    `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` from
    Project Settings → API.
 
-## 2. Microsoft (Azure AD) sign-in
+## 2. Passwordless email sign-in
 
-1. In [Supabase Auth providers](https://supabase.com/dashboard/project/_/auth/providers),
-   enable **Azure**.
-2. In the [Azure Portal](https://portal.azure.com) → App registrations,
-   register a new app. Add a redirect URI:
-   `https://<your-project-ref>.supabase.co/auth/v1/callback`.
-3. Under Certificates & secrets, create a client secret. Copy the
-   Application (client) ID and secret into the Supabase Azure provider
-   config, along with your Azure AD tenant ID (or `common` for any
-   Microsoft account, `organizations` for any work/school account).
-4. Verified contributors are managed manually in `user_roles` — sign-in
-   alone doesn't grant posting access. After someone signs in once, add a
-   row for their email with `status = 'active'` and the right `role`
-   (`admin`, `faculty`, `org_president`, or `student`). Until then they'll
-   see "not yet a verified contributor" on `/submit`.
+1. In Supabase Auth → Providers → Email, enable email OTP/magic links and
+   configure the SMTP sender appropriate for the pilot.
+2. Add the deployed site's `/auth/confirm` URL to the Supabase redirect allowlist.
+3. Roles are pre-provisioned or granted through the Website Committee; a
+   PVAMU email suffix proves mailbox control only and never grants a role.
+4. Review `SUPABASE_EMAIL_AUTH_LAUNCH_RUNBOOK.md` for templates, redirects,
+   access requests, first-admin provisioning, testing, and rollback.
 
 ## 3. Weekly digest email (Resend)
 
@@ -64,7 +60,7 @@ automatically once the env vars below are set.
 
 ## 4. Auto-archive (pg_cron)
 
-`archive_expired_opportunities()` (in `schema.sql`) moves opportunities to
+`archive_expired_opportunities()` (created and hardened by the migration chain) moves opportunities to
 `archived` 15 days after their deadline. Schedule it in the Supabase SQL
 editor:
 
@@ -77,6 +73,42 @@ select cron.schedule(
 ```
 
 (Requires the `pg_cron` extension, enabled under Database → Extensions.)
+
+## Privacy-safe engagement metrics
+
+The Hub stores UTC daily aggregate interaction counts only. It does not store
+IP addresses, account IDs, email addresses, user agents, referrers, cookies,
+device identifiers, or exact interaction timestamps. Counts are interactions,
+not unique people, and may include reloads or automated traffic.
+
+The homepage's **Panther opportunity connections** value means recorded
+outbound application-link clicks only; it does not claim applications or
+unique students. Reviewer impact metrics also show opportunity/event detail
+views, source and registration actions, calendar actions, and announcement
+list-page views for the trailing 7 days, trailing 30 days, and all time.
+
+## Private intake evidence and optional parser feedback
+
+`/submit` is permanently redirected to `/panther-submit`; the legacy form and
+its public-flyer upload action are retired. A live project created from an
+older schema may still contain the public `flyers` bucket and its legacy
+policies. An operator must inventory existing objects, preserve any records
+that are still referenced, and then remove or privatize that bucket/policies
+through a separately reviewed production migration. Do not delete live files
+without that inventory.
+
+Authorized reviewers receive 10-minute signed links to private intake source
+files plus parser provider/version, field suggestions, confidence, and review
+reasons. This evidence remains protected by the existing owner/reviewer RLS
+model and is not included on public pages.
+
+After successful intake, contributors may optionally rate extraction and mark
+which field categories needed attention. Feedback stores only the rating,
+selected field keys, and an optional 500-character note; it does not store
+corrected values, copied document text, email, IP address, user agent, or a
+device/browser identifier. Set `NEXT_PUBLIC_ENABLE_PARSER_FEEDBACK=false` in
+the deployment dashboard to hide this prompt. It defaults on for demo and
+testing. Feedback failure never rolls back or blocks the completed submission.
 
 ## 5. Flyer parsing — how it works, and the upgrade path
 
