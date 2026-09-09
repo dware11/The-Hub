@@ -1,0 +1,16 @@
+.git
+.agents
+.codex
+.vercel
+.env
+.env.*
+!.env.local.example
+node_modules
+.next
+.next-*
+out
+outputs
+tmp
+*.traineddata
+*.log
+npm-debug.log*
