@@ -14,6 +14,8 @@
     "test:parser": "node --experimental-vm-modules scripts/parser-real-examples-check.mjs",
     "test:calendar": "node scripts/calendar-ics-static-check.mjs"
     ,"test:editorial": "node scripts/editorial-filter-static-check.mjs"
+    ,"test:workflow": "node scripts/phase5-workflow-static-check.mjs"
+    ,"test:prehosting": "node scripts/prehosting-v1-static-check.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

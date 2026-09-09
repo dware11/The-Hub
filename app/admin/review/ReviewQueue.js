@@ -53,7 +53,7 @@ function IntakeEvidence({ evidence }) {
     <p className="review-private-note"><strong>Reviewer only.</strong> Private file links expire after 10 minutes and are never shown on public content pages.</p>
     <div className="review-key-meta"><span>Source relationship: {(evidence.relationship_to_source || 'not recorded').replaceAll('_', ' ')}</span><span>Intake state: {evidence.state || 'submitted'}</span></div>
     {evidence.artifacts?.length ? <div className="review-evidence-group"><strong>Source attachments</strong><ul>{evidence.artifacts.map((artifact) => <li key={artifact.id}>
-      {artifact.signed_url ? <a href={artifact.signed_url} target="_blank" rel="noreferrer">{artifact.original_filename || artifact.source_type || 'Private source'} ↗</a> : <span>{artifact.original_filename || artifact.source_type || 'Private source'} — secure link unavailable</span>}
+      {artifact.signed_url ? <a href={artifact.signed_url} target="_blank" rel="noreferrer">{artifact.original_filename || artifact.source_type || 'Private source'} ↗</a> : artifact.source_text ? <details><summary>{artifact.original_filename || 'Pasted text'}</summary><pre className="review-source-text">{artifact.source_text}</pre></details> : <span>{artifact.original_filename || artifact.source_type || 'Private source'} — secure evidence unavailable</span>}
       <small>{artifact.source_type} · {artifact.processing_status}</small>
     </li>)}</ul></div> : <p>No private source attachment was recorded.</p>}
     {evidence.suggestions?.length ? <div className="review-evidence-group"><strong>Parser provenance</strong><ul>{evidence.suggestions.map((suggestion) => <li key={suggestion.id}>

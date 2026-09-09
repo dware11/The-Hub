@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getEvent } from '../../../lib/data';
 import CalendarActions from '../../../components/CalendarActions';
 import EngagementTracker, { TrackedExternalLink } from '../../../components/EngagementTracker';
+import ReportIssueForm from '../../../components/ReportIssueForm';
 
 function displayDate(date) {
   return new Date(date + 'T00:00:00').toLocaleDateString();
@@ -137,6 +138,7 @@ export default async function EventDetail({ params }) {
               </TrackedExternalLink>
             </SideCard>
           )}
+          <ReportIssueForm contentType="event" contentId={e.id} label="Report an issue" />
         </div>
       </div>
     </div>

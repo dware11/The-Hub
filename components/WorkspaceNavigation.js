@@ -9,6 +9,7 @@ const WORKSPACE_NAV_ITEMS = [
   { label: 'Review Queue', href: '/admin/review' },
   { label: 'Content Management', href: '/admin/content', adminOnly: true },
   { label: 'People & Access', href: '/admin/people', adminOnly: true },
+  { label: 'Issues', href: '/admin/issues', adminOnly: true },
   { label: 'Analytics', href: '/admin/analytics' },
 ];
 

@@ -29,6 +29,9 @@ const expectedOrder = [
   '20260908180317_revoke_public_execute_rls_auto_enable.sql',
   '20260908184025_prevent_reviewer_self_review.sql',
   '20260909001132_normalize_v1_data_api_privileges.sql',
+  '20260909042638_phase5_workflow_repairs.sql',
+  '20260909043658_phase5_duplicate_trigger_acl.sql',
+  '20260909145833_pre_hosting_v1_multiday_reports_upload_hardening.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -55,6 +58,9 @@ const homeSpotlight = readMigration('202609060002_home_spotlight_controls.sql');
 const rlsAutoEnableHardening = readMigration('20260908180317_revoke_public_execute_rls_auto_enable.sql');
 const selfReviewHardening = readMigration('20260908184025_prevent_reviewer_self_review.sql');
 const dataApiPrivileges = readMigration('20260909001132_normalize_v1_data_api_privileges.sql');
+const workflowRepairs = readMigration('20260909042638_phase5_workflow_repairs.sql');
+const workflowTriggerAcl = readMigration('20260909043658_phase5_duplicate_trigger_acl.sql');
+const preHosting = readMigration('20260909145833_pre_hosting_v1_multiday_reports_upload_hardening.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -135,5 +141,19 @@ for (const aclControl of [
   'alter policy "owners upload intake sources to bound path" on storage.objects to authenticated',
 ]) assert.ok(dataApiPrivileges.includes(aclControl), `Data API ACL control missing: ${aclControl}`);
 assert.doesNotMatch(dataApiPrivileges, /grant\s+all/i, 'Application-facing roles must never receive GRANT ALL');
+
+for (const workflowControl of [
+  "'needs_correction','resubmitted'",
+  'contributors edit own returned opportunities',
+  'resubmit_corrected_content',
+  "registration_link=case when p_changes?'source_url'",
+  "link=case when p_changes?'source_url'",
+  'possible_duplicate boolean not null default false',
+  "recurrence_type = 'weekly'",
+]) assert.ok(workflowRepairs.includes(workflowControl), `Phase 5 workflow control missing: ${workflowControl}`);
+assert.doesNotMatch(workflowRepairs, /grant\s+all/i, 'Workflow repair must never grant broad privileges');
+assert.ok(workflowTriggerAcl.includes('revoke all on function public.flag_possible_duplicate() from public, anon, authenticated'), 'Duplicate trigger function must not be callable through the Data API');
+for (const control of ['add column if not exists end_date date', 'create table public.issue_reports', 'alter table public.issue_reports enable row level security', 'anyone creates open issue reports', 'admins read issue reports', 'add column if not exists source_text text', 'allowed_mime_types']) assert.ok(preHosting.includes(control), `Pre-hosting control missing: ${control}`);
+assert.doesNotMatch(preHosting, /grant\s+all/i, 'Pre-hosting migration must not grant broad privileges');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);

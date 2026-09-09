@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { EVENT_FILTERS, REGISTERED_EVENT_ORGANIZATIONS, eventCategories, eventCategoryClass, matchesEventCategories, matchesEventOrganizations } from '../lib/eventCategories';
 import { matchesSearch } from '../lib/search';
+import { eventOccursOnDate } from '../lib/eventRecurrence';
 
 const asDate = value => new Date(`${value}T12:00:00`);
 const PAGE_SIZES = [10, 20, 50];
@@ -27,7 +28,7 @@ export default function EventsAllBrowser({ events, initialDate = '' }) {
       && (!organization || matchesEventOrganizations(event, [organization]))
       && matchesSearch([event.title, event.org, event.description, event.location], search)
       && (specificDate
-        ? event.date === specificDate
+        ? eventOccursOnDate(event, specificDate)
         : (range === 'all' || (range === 'month' ? asDate(event.date) <= monthEnd : asDate(event.end_date || event.date) >= now)))
     ).sort((a, b) => (sort === 'latest' ? -1 : 1) * (asDate(a.date) - asDate(b.date)));
   }, [events, search, category, organization, range, specificDate, sort]);
@@ -60,7 +61,7 @@ export default function EventsAllBrowser({ events, initialDate = '' }) {
     {specificDate && <p className="events-date-filter-note" role="status">Showing events on <strong>{asDate(specificDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</strong>.</p>}
     <div className="events-result-row"><p className="events-result-count" aria-live="polite">{shown.length} {shown.length === 1 ? 'event' : 'events'} found</p><label>Show <select value={pageSize} onChange={event => setPageSize(Number(event.target.value))}>{PAGE_SIZES.map(size => <option key={size}>{size}</option>)}</select> per page</label></div>
     {shown.length
-      ? <div className="events-card-grid">{visible.map(event => <Link className={`events-editorial-card ${eventCategoryClass(event)}`} href={`/events/${event.id}`} key={event.id}><div className="events-card-date"><span>{asDate(event.date).toLocaleDateString('en-US', { month: 'short' })}</span><strong>{asDate(event.date).getDate()}</strong></div><div className="events-card-content"><div className="events-card-label">{eventCategories(event).join(' · ')}</div><h3>{event.title}</h3><p>{event.org}</p><div className="events-card-meta">{event.time && <span>{event.time}</span>}{event.location && <span>{event.location}</span>}</div><b>View Event <span aria-hidden="true">→</span></b></div></Link>)}</div>
+      ? <div className="events-card-grid">{visible.map(event => <Link className={`events-editorial-card ${eventCategoryClass(event)}`} href={`/events/${event.id}`} key={event.occurrence_key || event.id}><div className="events-card-date"><span>{asDate(event.date).toLocaleDateString('en-US', { month: 'short' })}</span><strong>{asDate(event.date).getDate()}</strong></div><div className="events-card-content"><div className="events-card-label">{eventCategories(event).join(' · ')}</div><h3>{event.title}</h3><p>{event.org}</p><div className="events-card-meta">{event.time && <span>{event.time}</span>}{event.location && <span>{event.location}</span>}</div><b>View Event <span aria-hidden="true">→</span></b></div></Link>)}</div>
       : <div className="events-empty" role="status"><h3>{specificDate ? 'No events on this date' : 'No matching events'}</h3><p>Choose another date or clear the filters to browse all upcoming events.</p><button type="button" onClick={clear}>Clear filters</button></div>}
     {pageCount > 1 && <nav className="announcement-pagination public-pagination" aria-label="Event pages"><button type="button" disabled={page === 1} onClick={() => setPage(value => value - 1)} aria-label="Previous page">←</button>{Array.from({ length: pageCount }, (_, index) => index + 1).map(number => <button type="button" key={number} className={number === page ? 'active' : ''} aria-current={number === page ? 'page' : undefined} aria-label={`Go to page ${number}`} onClick={() => setPage(number)}>{number}</button>)}<button type="button" disabled={page === pageCount} onClick={() => setPage(value => value + 1)} aria-label="Next page">→</button></nav>}
   </section>;

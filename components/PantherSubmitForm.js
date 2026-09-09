@@ -24,11 +24,8 @@ const RELATIONSHIPS = [
 ];
 
 const SOURCE_TYPES = [
-  ['flyer', 'Flyer image'],
   ['program_pdf', 'Program PDF'],
-  ['email_screenshot', 'Email screenshot'],
-  ['screenshot', 'Post or webpage screenshot'],
-  ['other', 'Other supporting source'],
+  ['screenshot', 'Screenshot / Image'],
 ];
 
 const OPPORTUNITY_TYPES = ['Internship', 'Co-op', 'Research', 'Scholarship', 'Competition', 'Other'];
@@ -65,6 +62,7 @@ function emptyFields(viewer, type) {
     description: '',
     eligibility: '',
     date: '',
+    endDate: '',
     time: '',
     deadline: '',
     location: '',
@@ -86,10 +84,13 @@ function mb(bytes) {
 }
 
 async function validateClientFile(file) {
-  const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+  const allowed = ['application/pdf', 'image/png', 'image/jpeg'];
   if (!allowed.includes(file.type)) {
-    throw new Error(`${file.name} is not a supported PNG, JPEG, WebP, or PDF.`);
+    throw new Error(`${file.name} is not a supported PDF, PNG, JPG, or JPEG.`);
   }
+  const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+  const validExtension = file.type === 'application/pdf' ? extension === 'pdf' : (file.type === 'image/png' ? extension === 'png' : ['jpg', 'jpeg'].includes(extension));
+  if (!validExtension) throw new Error(`${file.name} has an extension that does not match its file type.`);
   const limit = file.type === 'application/pdf' ? 15 * 1024 * 1024 : 10 * 1024 * 1024;
   if (file.size > limit) {
     throw new Error(
@@ -126,7 +127,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
   const [relationship, setRelationship] = useState('');
   const [referral, setReferral] = useState({ name: '', title: '', organization: '', email: '', mayDisplay: false });
   const [artifacts, setArtifacts] = useState([]);
-  const [nextSourceType, setNextSourceType] = useState('flyer');
+  const [nextSourceType, setNextSourceType] = useState('screenshot');
   const [pastedText, setPastedText] = useState('');
   const [parseResult, setParseResult] = useState(null);
   const [fields, setFields] = useState(() => emptyFields(viewer, 'opportunity'));
@@ -285,6 +286,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
       ? {
           ...common,
           date: fields.date,
+          end_date: fields.endDate || null,
           time: fields.time,
           registration_link: fields.link || null,
           presenter_name: fields.presenterName || null,
@@ -306,6 +308,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
         contentType,
         relationshipToSource: relationship,
         referral,
+        pastedText,
         artifacts: artifacts.map((artifact) => ({
           clientId: artifact.id,
           sourceType: artifact.sourceType,
@@ -315,6 +318,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
         })),
       });
       if (!intake.ok) throw new Error(intake.error);
+      const sourceIds = Object.fromEntries((intake.sources || []).map(source => [source.clientId, source.artifactId]));
 
       if (!intake.demo && intake.uploads.length) {
         const supabase = createClient();
@@ -333,7 +337,13 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
         intakeSessionId: intake.intakeSessionId,
         contentType,
         payload: buildPayload(null),
-        suggestions: parseResult?.provenance || {},
+        suggestions: Object.fromEntries(Object.entries(parseResult?.provenance || {}).map(([field, suggestion]) => [field, { ...suggestion, sourceArtifactId: sourceIds[suggestion.sourceArtifactId] || null }])),
+        sourceResults: (parseResult?.source?.processed || []).map(result => ({
+          sourceArtifactId: sourceIds[result.artifactId] || null,
+          status: result.status === 'failed' ? 'failed' : (parseResult?.warnings?.some(warning => warning.artifactId === result.artifactId) ? 'needs_review' : 'processed'),
+          pageCount: result.pageCount,
+          warnings: (parseResult?.warnings || []).filter(warning => warning.artifactId === result.artifactId).map(warning => warning.message),
+        })),
         confirmedValues: fields,
       });
       if (!finalized.ok) throw new Error(finalized.error);
@@ -439,11 +449,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
       {step === 3 && (
         <Panel title="Add your sources">
           <p className="text-sm text-slate mb-5">
-            {contentType === 'event'
-              ? 'An event flyer is best for date, time, location, host, and registration. An email screenshot adds audience and referral context.'
-              : contentType === 'opportunity'
-                ? 'A flyer or program PDF is best for eligibility, compensation, deadline, and application details. An email screenshot adds audience and referral context.'
-                : 'Paste the announcement or add the original notice and supporting screenshot.'}
+            Upload a PDF or screenshot, or paste the details directly. Accepted files: PDF, PNG, JPG/JPEG.
           </p>
           <div className="grid md:grid-cols-[1fr_auto] gap-3">
             <select value={nextSourceType} onChange={(event) => setNextSourceType(event.target.value)} className="input">
@@ -451,7 +457,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
             </select>
             <label className="bg-purple-900 text-white rounded-lg px-5 py-3 text-sm cursor-pointer text-center">
               Add source file
-              <input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={addFiles} />
+              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" className="hidden" onChange={addFiles} />
             </label>
           </div>
 
@@ -537,7 +543,8 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
                 {contentType === 'opportunity' && <label className="block mt-4"><span className="text-sm font-medium block mb-1.5">Eligibility and requirements</span><textarea className="input" rows={4} value={fields.eligibility} onChange={(event) => updateField('eligibility', event.target.value)} placeholder="Who is eligible, required experience, GPA, work authorization, or other qualifications" /></label>}
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
                   <label><span className="text-sm font-medium block mb-1.5">Category</span><select className="input" value={fields.subtype} onChange={(event) => updateField('subtype', event.target.value)}>{(contentType === 'event' ? EVENT_TYPES : OPPORTUNITY_TYPES).map((value) => <option key={value}>{value}</option>)}</select></label>
-                  <Input label={contentType === 'event' ? 'Event date' : 'Application deadline'} type="date" required value={contentType === 'event' ? fields.date : fields.deadline} onChange={(value) => updateField(contentType === 'event' ? 'date' : 'deadline', value)} />
+                  <Input label={contentType === 'event' ? 'Event start date' : 'Application deadline'} type="date" required value={contentType === 'event' ? fields.date : fields.deadline} onChange={(value) => updateField(contentType === 'event' ? 'date' : 'deadline', value)} />
+                  {contentType === 'event' && <Input label="Event end date (optional)" type="date" min={fields.date || undefined} value={fields.endDate} onChange={(value) => updateField('endDate', value)} />}
                   {contentType === 'event' && <Input label="Time" value={fields.time} onChange={(value) => updateField('time', value)} placeholder="4:00–5:15 PM" />}
                   <Input label={contentType === 'opportunity' && fields.workMode && fields.workMode !== 'Remote' ? 'Location (required)' : 'Location'} required={contentType === 'opportunity' && Boolean(fields.workMode) && fields.workMode !== 'Remote'} value={fields.location} onChange={(value) => updateField('location', value)} />
                   <Input label={contentType === 'event' ? 'Registration link' : 'Application link'} type="url" required={contentType === 'opportunity'} value={fields.link} onChange={(value) => updateField('link', value)} />
@@ -570,8 +577,8 @@ function Panel({ title, children }) {
   return <section className="bg-white border border-line rounded-2xl p-6 md:p-8"><h2 className="font-display text-xl text-purple-900 mb-5">{title}</h2>{children}</section>;
 }
 
-function Input({ label, value, onChange, type = 'text', required, placeholder }) {
-  return <label className="block"><span className="text-sm font-medium block mb-1.5">{label}{required && <span className="text-coral"> *</span>}</span><input className="input" type={type} required={required} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>;
+function Input({ label, value, onChange, type = 'text', required, placeholder, min }) {
+  return <label className="block"><span className="text-sm font-medium block mb-1.5">{label}{required && <span className="text-coral"> *</span>}</span><input className="input" type={type} required={required} value={value} placeholder={placeholder} min={min} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function Navigation({ back, next, nextDisabled, nextLabel = 'Continue' }) {

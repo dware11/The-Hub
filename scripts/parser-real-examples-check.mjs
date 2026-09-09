@@ -80,6 +80,14 @@ assert.match(disney.fields.link, /^https:\/\/events\.teams\.microsoft\.com/);
 assert.ok(disney.tags.categories.includes('Internship'));
 assert.ok(disney.tags.sectors.includes('Technology/software'));
 
+const tiInternship = await parseMultipleSources({
+  contentType: 'opportunity',
+  artifacts: [],
+  pastedText: `Texas Instruments Inc.\nDesign Verification Engineering Intern - Bachelors\nApply by October 3, 2026 at 5:12 PM\nElectrical Engineering or Computer Engineering`,
+});
+assert.equal(tiInternship.fields.title, 'Design Verification Engineering Intern - Bachelors');
+assert.equal(tiInternship.fields.deadline, '2026-10-03');
+
 const panthersInventPosting = `
 Panther's Invent 2026
 Dates: September 11–13, 2026

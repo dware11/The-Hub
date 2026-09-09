@@ -1,5 +1,5 @@
 begin;
-select plan(14);
+select plan(15);
 
 insert into auth.users (id, email, email_confirmed_at) values
   ('00000000-0000-4000-8000-000000000101', 'phase4-no-role@staging.invalid', now()),
@@ -58,6 +58,12 @@ select lives_ok(
   $$select public.request_review_correction('announcement','20000000-0000-4000-8000-000000000201','independent correction')$$,
   'reviewer can request correction for another contributor'
 );
+set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000102","role":"authenticated","email":"phase4-contributor@staging.invalid"}';
+select lives_ok(
+  $$select public.resubmit_corrected_content('announcement','20000000-0000-4000-8000-000000000201')$$,
+  'original contributor can resubmit corrected content'
+);
+set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000103","role":"authenticated","email":"phase4-reviewer@staging.invalid"}';
 select lives_ok(
   $$select public.record_review_evidence('announcement','20000000-0000-4000-8000-000000000201',true,true,true,true,true,'verified after correction','approved')$$,
   'reviewer can complete evidence after correction'

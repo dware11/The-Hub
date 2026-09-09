@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getOpportunity } from '../../../lib/data';
 import CalendarActions from '../../../components/CalendarActions';
 import EngagementTracker, { TrackedExternalLink } from '../../../components/EngagementTracker';
+import ReportIssueForm from '../../../components/ReportIssueForm';
 
 function displayDate(date) {
   return new Date(date + 'T00:00:00').toLocaleDateString();
@@ -127,6 +128,7 @@ export default async function OpportunityDetail({ params }) {
               </TrackedExternalLink>
             </SideCard>
           )}
+          <ReportIssueForm contentType="opportunity" contentId={o.id} label="Report an issue" />
         </div>
       </div>
     </div>

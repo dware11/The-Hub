@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { eventCategories, eventCategoryClass } from '../lib/eventCategories';
+import { eventDates } from '../lib/eventRecurrence';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -13,7 +14,7 @@ export default function EventsCalendar({ events }) {
   const [cursor, setCursor] = useState(new Date(now.getFullYear(), now.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(null);
   const byDate = useMemo(() => events.reduce((dates, event) => {
-    (dates[event.date] ||= []).push(event);
+    for (const date of eventDates(event)) (dates[date] ||= []).push(event);
     return dates;
   }, {}), [events]);
   const cells = useMemo(() => {
@@ -41,7 +42,7 @@ export default function EventsCalendar({ events }) {
         <div className="events-calendar-grid" role="grid" aria-label={cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}>
           {DAYS.map(day => <div className="events-weekday" role="columnheader" key={day}>{day}</div>)}
           {cells.map((date, index) => date
-            ? <button type="button" className={`events-day${iso(date) === iso(now) ? ' is-today' : ''}${selectedDate === iso(date) ? ' is-selected' : ''}${byDate[iso(date)]?.length ? ' has-events' : ''}`} role="gridcell" aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${byDate[iso(date)]?.length ? `, ${byDate[iso(date)].length} events` : ', no events'}`} aria-pressed={selectedDate === iso(date)} onClick={() => select(date)} key={iso(date)}><span>{date.getDate()}</span><div className="events-day-items">{(byDate[iso(date)] || []).slice(0, 2).map(event => <i className={eventCategoryClass(event)} key={event.id}>{event.title}</i>)}{(byDate[iso(date)] || []).length > 2 && <small>+{byDate[iso(date)].length - 2} more</small>}</div></button>
+            ? <button type="button" className={`events-day${iso(date) === iso(now) ? ' is-today' : ''}${selectedDate === iso(date) ? ' is-selected' : ''}${byDate[iso(date)]?.length ? ' has-events' : ''}`} role="gridcell" aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${byDate[iso(date)]?.length ? `, ${byDate[iso(date)].length} events` : ', no events'}`} aria-pressed={selectedDate === iso(date)} onClick={() => select(date)} key={iso(date)}><span>{date.getDate()}</span><div className="events-day-items">{(byDate[iso(date)] || []).slice(0, 2).map(event => <i className={eventCategoryClass(event)} key={event.occurrence_key || event.id}>{event.title}</i>)}{(byDate[iso(date)] || []).length > 2 && <small>+{byDate[iso(date)].length - 2} more</small>}</div></button>
             : <div className="events-day is-blank" role="gridcell" aria-hidden="true" key={`blank-${index}`} />)}
         </div>
       </div>
@@ -50,7 +51,7 @@ export default function EventsCalendar({ events }) {
       {selectedDate ? <>
         <header><span>Selected date</span><h3>{localDate(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h3><p>{selectedEvents.length} {selectedEvents.length === 1 ? 'event' : 'events'}</p></header>
         {selectedEvents.length
-          ? <div className="events-selected-list">{selectedEvents.map(event => <Link href={`/events/${event.id}`} key={event.id}><div className={`events-selected-category ${eventCategoryClass(event)}`}>{eventCategories(event).join(' · ')}</div><h4>{event.title}</h4><p>{event.org}</p>{event.time && <small>{event.time}</small>}{event.location && <small>{event.location}</small>}<b>View Event <span aria-hidden="true">→</span></b></Link>)}</div>
+          ? <div className="events-selected-list">{selectedEvents.map(event => <Link href={`/events/${event.id}`} key={event.occurrence_key || event.id}><div className={`events-selected-category ${eventCategoryClass(event)}`}>{eventCategories(event).join(' · ')}</div><h4>{event.title}</h4><p>{event.org}</p>{event.time && <small>{event.time}</small>}{event.location && <small>{event.location}</small>}<b>View Event <span aria-hidden="true">→</span></b></Link>)}</div>
           : <div className="events-selected-empty"><strong>No events scheduled for this day.</strong><p>Choose another date or browse the full event list.</p></div>}
         <Link className="events-selected-all" href={`/events/all?date=${selectedDate}`}>View all events on {localDate(selectedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} <span aria-hidden="true">→</span></Link>
       </> : <div className="events-select-prompt"><span aria-hidden="true">◇</span><h3>Select a date</h3><p>Choose any day to see its engineering and campus events.</p></div>}

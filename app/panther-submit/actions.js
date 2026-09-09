@@ -39,8 +39,12 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/png',
   'image/jpeg',
-  'image/webp',
 ]);
+const MIME_EXTENSIONS = Object.freeze({
+  'application/pdf': new Set(['pdf']),
+  'image/png': new Set(['png']),
+  'image/jpeg': new Set(['jpg', 'jpeg']),
+});
 
 function cleanText(value, max = 300) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -61,8 +65,11 @@ function validateArtifactMetadata(artifacts) {
     const mimeType = cleanText(artifact.mimeType, 100);
     const byteSize = Number(artifact.byteSize);
     if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-      throw new Error(`${artifact.name || 'A source'} must be a PNG, JPEG, WebP, or PDF.`);
+      throw new Error(`${artifact.name || 'A source'} must be a PDF, PNG, JPG, or JPEG.`);
     }
+    const originalFilename = safeFilename(artifact.name);
+    const extension = originalFilename.includes('.') ? originalFilename.split('.').pop().toLowerCase() : '';
+    if (!MIME_EXTENSIONS[mimeType]?.has(extension)) throw new Error(`${artifact.name || 'A source'} has an extension that does not match its file type.`);
     if (!Number.isSafeInteger(byteSize) || byteSize <= 0) {
       throw new Error(`${artifact.name || 'A source'} has an invalid file size.`);
     }
@@ -77,7 +84,7 @@ function validateArtifactMetadata(artifacts) {
     return {
       clientId: cleanText(artifact.clientId, 100),
       sourceType,
-      originalFilename: safeFilename(artifact.name),
+      originalFilename,
       mimeType,
       byteSize,
     };
@@ -112,8 +119,10 @@ export async function beginIntakeAction(input) {
   }
 
   let artifacts;
+  let pastedText;
   try {
     artifacts = validateArtifactMetadata(input.artifacts || []);
+    pastedText = cleanText(input.pastedText, 50000);
   } catch (error) {
     return { ok: false, error: error.message };
   }
@@ -124,6 +133,7 @@ export async function beginIntakeAction(input) {
       demo: true,
       intakeSessionId: 'demo-intake-session',
       uploads: [],
+      sources: [],
     };
   }
 
@@ -147,6 +157,7 @@ export async function beginIntakeAction(input) {
   if (sessionError) return { ok: false, error: 'The intake session could not be created.' };
 
   const uploads = [];
+  const sources = [];
   for (const artifact of artifacts) {
     const artifactId = crypto.randomUUID();
     const storagePath = `${viewer.role.id}/${session.id}/${artifactId}-${artifact.originalFilename}`;
@@ -173,9 +184,27 @@ export async function beginIntakeAction(input) {
       path: signed.path,
       token: signed.token,
     });
+    sources.push({ clientId: artifact.clientId, artifactId });
   }
 
-  return { ok: true, intakeSessionId: session.id, uploads };
+  if (pastedText) {
+    const artifactId = crypto.randomUUID();
+    const { error: pastedError } = await supabase.from('source_artifacts').insert({
+      id: artifactId, intake_session_id: session.id, source_type: 'pasted_text',
+      original_filename: 'Pasted text', source_text: pastedText, processing_status: 'processed',
+    });
+    if (pastedError) return { ok: false, error: 'Pasted source text could not be saved.' };
+    sources.push({ clientId: 'pasted-text', artifactId });
+  }
+
+  return { ok: true, intakeSessionId: session.id, uploads, sources };
+}
+
+function signatureMatches(bytes, mimeType) {
+  if (mimeType === 'application/pdf') return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d;
+  if (mimeType === 'image/png') return [0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a].every((value, index) => bytes[index] === value);
+  if (mimeType === 'image/jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  return false;
 }
 
 export async function finalizeIntakeAction(input) {
@@ -208,18 +237,28 @@ export async function finalizeIntakeAction(input) {
     .maybeSingle();
   if (!session) return { ok: false, error: 'The intake session could not be verified.' };
 
-  const { data: content, error: contentError } = await supabase
-    .from(table)
-    .insert({
-      ...payload,
-      submitted_by: viewer.role.id,
-      intake_session_id: session.id,
-      status: 'pending',
-    })
-    .select('id, status')
-    .single();
+  const { data: sourceRows, error: sourceError } = await supabase.from('source_artifacts').select('id, storage_path, mime_type').eq('intake_session_id', session.id);
+  if (sourceError) return { ok: false, error: 'The source evidence could not be verified.' };
+  for (const source of sourceRows || []) {
+    if (!source.storage_path) continue;
+    const { data: file, error: downloadError } = await supabase.storage.from('intake-sources').download(source.storage_path);
+    if (downloadError || !file) return { ok: false, error: 'A source upload is missing. Please upload it again.' };
+    const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+    if (!signatureMatches(bytes, source.mime_type)) {
+      await supabase.from('source_artifacts').update({ processing_status: 'failed', warnings: ['File contents did not match the declared format.'] }).eq('id', source.id).eq('intake_session_id', session.id);
+      return { ok: false, error: 'A source file did not match its declared format. Upload a valid PDF, PNG, JPG, or JPEG.' };
+    }
+  }
 
-  if (contentError) return { ok: false, error: 'The submission could not be saved.' };
+  for (const result of Array.isArray(input.sourceResults) ? input.sourceResults : []) {
+    if (!result?.sourceArtifactId) continue;
+    const status = ['processed', 'needs_review', 'failed'].includes(result.status) ? result.status : 'needs_review';
+    await supabase.from('source_artifacts').update({
+      processing_status: status,
+      page_count: Number.isInteger(result.pageCount) && result.pageCount > 0 ? result.pageCount : null,
+      warnings: Array.isArray(result.warnings) ? result.warnings.slice(0, 10).map(value => cleanText(value, 500)) : [],
+    }).eq('id', result.sourceArtifactId).eq('intake_session_id', session.id);
+  }
 
   const suggestionRows = Object.entries(input.suggestions || {}).slice(0, 50).map(([field, suggestion]) => ({
     intake_session_id: session.id,
@@ -235,7 +274,23 @@ export async function finalizeIntakeAction(input) {
     contributor_value: input.confirmedValues?.[field] ?? null,
     contributor_confirmed_at: new Date().toISOString(),
   }));
-  if (suggestionRows.length) await supabase.from('field_suggestions').insert(suggestionRows);
+  if (suggestionRows.length) {
+    const { error: suggestionError } = await supabase.from('field_suggestions').insert(suggestionRows);
+    if (suggestionError) return { ok: false, error: 'Parser evidence could not be saved. The submission has not been finalized.' };
+  }
+
+  const { data: content, error: contentError } = await supabase
+    .from(table)
+    .insert({
+      ...payload,
+      submitted_by: viewer.role.id,
+      intake_session_id: session.id,
+      status: 'pending',
+    })
+    .select('id, status')
+    .single();
+
+  if (contentError) return { ok: false, error: 'The submission could not be saved.' };
 
   await supabase
     .from('intake_sessions')
