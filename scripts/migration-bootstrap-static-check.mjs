@@ -28,6 +28,7 @@ const expectedOrder = [
   '202609060002_home_spotlight_controls.sql',
   '20260908180317_revoke_public_execute_rls_auto_enable.sql',
   '20260908184025_prevent_reviewer_self_review.sql',
+  '20260909001132_normalize_v1_data_api_privileges.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -53,6 +54,7 @@ const announcementPublication = readMigration('202609060001_announcement_publica
 const homeSpotlight = readMigration('202609060002_home_spotlight_controls.sql');
 const rlsAutoEnableHardening = readMigration('20260908180317_revoke_public_execute_rls_auto_enable.sql');
 const selfReviewHardening = readMigration('20260908184025_prevent_reviewer_self_review.sql');
+const dataApiPrivileges = readMigration('20260909001132_normalize_v1_data_api_privileges.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -121,5 +123,17 @@ for (const spotlightControl of ['manage_home_spotlight', 'Only published content
 for (const hardeningControl of ["to_regprocedure('public.rls_auto_enable()')", 'revoke execute on function public.rls_auto_enable() from public']) assert.ok(rlsAutoEnableHardening.includes(hardeningControl), `RLS auto-enable hardening control missing: ${hardeningControl}`);
 for (const selfReviewControl of ['record_review_evidence', 'review_content', 'request_review_correction', 'target_submitter_id = actor.id', 'Reviewers cannot review or modify review evidence for their own submission']) assert.ok(selfReviewHardening.includes(selfReviewControl), `Self-review hardening control missing: ${selfReviewControl}`);
 assert.equal((selfReviewHardening.match(/target_submitter_id = actor\.id/g) || []).length, 3, 'Every review entry point must enforce the self-review guard');
+
+for (const aclControl of [
+  'revoke all privileges on table',
+  'from anon, authenticated',
+  'grant select on table public.user_roles to authenticated',
+  'grant select, insert, update on table public.intake_sessions to authenticated',
+  'grant select, insert, update, delete on table public.source_artifacts to authenticated',
+  'grant select, insert on table public.field_suggestions to authenticated',
+  'alter policy "contributors read own opportunities" on public.opportunities to authenticated',
+  'alter policy "owners upload intake sources to bound path" on storage.objects to authenticated',
+]) assert.ok(dataApiPrivileges.includes(aclControl), `Data API ACL control missing: ${aclControl}`);
+assert.doesNotMatch(dataApiPrivileges, /grant\s+all/i, 'Application-facing roles must never receive GRANT ALL');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);
