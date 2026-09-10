@@ -17,9 +17,9 @@ export default async function HomePage() {
     ...open.filter(item => item.is_featured || item.spotlight || item.featured).map(item => ({ ...item, contentType: 'opportunity', href: `/opportunities/${item.id}` })),
     ...events.filter(item => (item.is_featured || item.spotlight || item.featured) && localDate(item.end_date || item.date) >= today).map(item => ({ ...item, contentType: 'event', href: `/events/${item.id}` })),
     ...announcements.filter(item => item.is_featured).map(item => ({ ...item, contentType: 'announcement', href: `/announcements/${item.id}` })),
-  ].sort((a,b) => (a.spotlight_rank || 99) - (b.spotlight_rank || 99));
+  ].sort((a,b) => (a.spotlight_rank || 99) - (b.spotlight_rank || 99)).slice(0,5);
   const closing = open.filter(item => item.deadline && isClosingThisWeek(item.deadline, today)).sort((a,b) => localDate(a.deadline) - localDate(b.deadline)).slice(0,4);
-  const upcoming = events.filter(item => localDate(item.end_date || item.date) >= today).sort((a,b) => localDate(a.date) - localDate(b.date)).slice(0,4);
+  const upcoming = events.filter(item => item.home_visible !== false && localDate(item.end_date || item.date) >= today).sort((a,b) => (a.home_rank || 99) - (b.home_rank || 99) || localDate(a.date) - localDate(b.date)).slice(0,4);
   const latestAnnouncements = [...announcements].filter(item => !/engineering hub pilot is live/i.test(item.title || '')).sort((a,b) => publishedDate(b) - publishedDate(a)).slice(0,4);
 
   return <div className="home-page">

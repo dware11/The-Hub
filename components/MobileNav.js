@@ -55,7 +55,7 @@ export default function MobileNav({ reviewer, admin, superAdmin }) {
               <Link href="/admin/committee" onClick={closeMenu}>Contributor Approvals</Link>
               {admin && <><Link href="/admin/content" onClick={closeMenu}>Content Management</Link><Link href="/admin/people" onClick={closeMenu}>People &amp; Access</Link></>}
               <Link href="/admin/analytics" onClick={closeMenu}>Analytics</Link>
-              {superAdmin && <><Link href="/admin/history" onClick={closeMenu}>History</Link><Link href="/admin/system" onClick={closeMenu}>System Insights</Link></>}
+              {superAdmin && <><Link href="/admin/history" onClick={closeMenu}>History</Link><Link href="/admin/system-insights" onClick={closeMenu}>System Insights</Link></>}
             </div>}
           </div>}
         </div>

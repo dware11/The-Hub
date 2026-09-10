@@ -4,18 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
-const WORKSPACE_NAV_ITEMS = [
-  { label: 'Overview', href: '/admin' },
-  { label: 'Review Queue', href: '/admin/review' },
-  { label: 'Content Management', href: '/admin/content', adminOnly: true },
-  { label: 'People & Access', href: '/admin/people', adminOnly: true },
-  { label: 'Issues', href: '/admin/issues', adminOnly: true },
-  { label: 'Analytics', href: '/admin/analytics' },
-];
-
-const SUPER_ADMIN_NAV_ITEMS = [
-  { label: 'History', href: '/admin/history' },
-  { label: 'System Insights', href: '/admin/system' },
+const GROUPS = [
+  { label: 'Workspace', items: [{ label: 'Overview', href: '/admin' }] },
+  { label: 'Review', items: [{ label: 'Review Queue', href: '/admin/review' }] },
+  { label: 'Content', adminOnly: true, items: [{ label: 'Content Management', href: '/admin/content' }] },
+  { label: 'Operations', items: [{ label: 'Analytics', href: '/admin/analytics' }, { label: 'Issues', href: '/admin/issues', adminOnly: true }, { label: 'People & Access', href: '/admin/people', adminOnly: true }] },
+  { label: 'Super Admin', superOnly: true, items: [{ label: 'System Insights', href: '/admin/system-insights' }, { label: 'History', href: '/admin/history' }] },
 ];
 
 function isActivePath(pathname, href) {
@@ -25,7 +19,6 @@ function isActivePath(pathname, href) {
 export default function WorkspaceNavigation({ admin, superAdmin }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const items = WORKSPACE_NAV_ITEMS.filter(item => !item.adminOnly || admin);
 
   const renderLink = item => (
     <Link
@@ -54,11 +47,10 @@ export default function WorkspaceNavigation({ admin, superAdmin }) {
       className={`workspace-nav${open ? ' is-open' : ''}`}
       aria-label="Workspace navigation"
     >
-      {items.map(renderLink)}
-      {superAdmin && <>
-        <span className="workspace-nav-label">Super Admin</span>
-        {SUPER_ADMIN_NAV_ITEMS.map(renderLink)}
-      </>}
+      {GROUPS.filter(group => (!group.adminOnly || admin) && (!group.superOnly || superAdmin)).map(group => {
+        const items = group.items.filter(item => !item.adminOnly || admin);
+        return items.length ? <div className="workspace-nav-group" key={group.label}><span className="workspace-nav-label">{group.label}</span>{items.map(renderLink)}</div> : null;
+      })}
     </nav>
   </>;
 }

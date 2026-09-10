@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { createClient, isDemoMode } from '../lib/supabaseClient';
 import { parseMultipleSources } from '../lib/multiSourceParser';
-import { beginIntakeAction, finalizeIntakeAction, saveParserFeedbackAction } from '../app/panther-submit/actions';
+import { abandonIntakeAction, beginIntakeAction, finalizeIntakeAction, saveParserFeedbackAction } from '../app/panther-submit/actions';
 import { MAJORS } from '../lib/sampleData';
 import { ANNOUNCEMENT_CATEGORIES } from '../lib/announcementCategories';
 
@@ -329,7 +329,10 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
             .uploadToSignedUrl(upload.path, upload.token, artifact.file, {
               contentType: artifact.file.type,
             });
-          if (uploadError) throw new Error(`${artifact.name} could not be uploaded securely. Please try again.`);
+          if (uploadError) {
+            await abandonIntakeAction(intake.intakeSessionId);
+            throw new Error(`${artifact.name} could not be uploaded securely. Please try again.`);
+          }
         }
       }
 
@@ -374,6 +377,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
           Panther Hub received “{fields.title}.” Nothing is published until an authorized reviewer approves it.
           {isDemoMode && ' This was a demo submission and was not saved.'}
         </p>
+        <a href="/panther-submit" className="gold-button inline-flex mt-5">Submit another</a>
         {feedbackEnabled && <form onSubmit={saveFeedback} className="parser-feedback mt-6 border-t border-line pt-5">
           <h2 className="font-display text-lg text-purple-900">Optional: how accurate were the suggestions?</h2>
           <p className="text-xs text-slate mt-1">This helps improve extraction. It does not change your completed submission, and no document text, corrected values, email, device, or browsing identifier is collected.</p>
@@ -486,6 +490,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
       {step === 4 && (
         <form onSubmit={submit}>
           <Panel title="Confirm the student-facing details">
+            {(artifacts.length > 0 || parseResult?.source?.processed?.length > 0) && <Notice>OCR is currently being improved. If you use an uploaded screenshot or PDF, please review and confirm the information below before submitting.</Notice>}
             {parseResult?.warnings?.map((warning) => <Notice key={`${warning.code}-${warning.artifactId || ''}`}>{warning.message}</Notice>)}
             {parseResult?.conflicts?.map((conflict) => <Notice key={conflict.field}>{conflict.message}</Notice>)}
 

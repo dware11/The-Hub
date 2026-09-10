@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { EVENT_FILTERS, REGISTERED_EVENT_ORGANIZATIONS } from '../lib/eventCategories';
 
 const FILTER_CLASSES = ['event-category--milestones', 'event-category--college', 'event-category--organizations', 'event-category--campus'];
+const FILTER_LABELS = { 'Engineering Student Organizations': 'Student Organizations' };
 
-export default function EventFilterControls({ selected, onToggle, onClear, selectedOrganizations = [], onOrganizationToggle, onOrganizationClear, onClearAll, count, organizations = REGISTERED_EVENT_ORGANIZATIONS, label = 'Filter calendar' }) {
+export default function EventFilterControls({ selected, onToggle, onClear, selectedOrganizations = [], onOrganizationToggle, onOrganizationClear, onClearAll, count, organizations = REGISTERED_EVENT_ORGANIZATIONS, label = 'Filter calendar', defaultCurated = false }) {
   return <div className="event-filter-panel">
     <fieldset>
       <legend>{label}</legend>
@@ -25,22 +26,22 @@ export default function EventFilterControls({ selected, onToggle, onClear, selec
           onClick={() => onToggle(filter)}
           key={filter}
         >
-          {filter}
+          {FILTER_LABELS[filter] || filter}
         </button>)}
       </div>
     </fieldset>
-    <fieldset className="organization-filter-group">
+    {(selected.includes('Engineering Student Organizations') || selectedOrganizations.length > 0) && <fieldset className="organization-filter-group">
       <legend>Organization</legend>
       <OrganizationPicker organizations={organizations} selected={selectedOrganizations} onToggle={onOrganizationToggle} onClear={onOrganizationClear} />
-    </fieldset>
+    </fieldset>}
     <div className="event-filter-summary">
-      <p aria-live="polite">{count} {count === 1 ? 'event' : 'events'} shown{selected.length ? ` across ${selected.length} selected categories` : ' across all categories'}{selectedOrganizations.length ? ` for ${selectedOrganizations.length} selected ${selectedOrganizations.length === 1 ? 'organization' : 'organizations'}` : ' for all organizations'}.</p>
+      <p aria-live="polite">{count} {count === 1 ? 'event' : 'events'} shown{defaultCurated ? ' in the priority calendar; student-organization programming remains in View All' : selected.length ? ` across ${selected.length} selected categories` : ' across all categories'}{selectedOrganizations.length ? ` for ${selectedOrganizations.length} selected ${selectedOrganizations.length === 1 ? 'organization' : 'organizations'}` : ''}.</p>
       {(selected.length > 0 || selectedOrganizations.length > 0) && <button type="button" className="clear-filters" onClick={onClearAll}>Clear all filters</button>}
     </div>
   </div>;
 }
 
-function OrganizationPicker({ organizations, selected, onToggle, onClear }) {
+export function OrganizationPicker({ organizations, selected, onToggle, onClear }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const shown = organizations.filter(item => item.label.toLowerCase().includes(query.toLowerCase()));

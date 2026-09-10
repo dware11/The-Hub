@@ -100,7 +100,7 @@ export default function DesktopNavMenus({ reviewer, admin, superAdmin }) {
           {superAdmin && <>
             <span className="desktop-nav-menu-label">Super Admin</span>
             <MenuLink href="/admin/history">History</MenuLink>
-            <MenuLink href="/admin/system">System Insights</MenuLink>
+            <MenuLink href="/admin/system-insights">System Insights</MenuLink>
           </>}
         </MenuGroup>
       )}

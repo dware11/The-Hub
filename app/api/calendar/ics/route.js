@@ -32,8 +32,8 @@ export function GET(request) {
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//C.O.D.E. Engineering Hub//Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     'BEGIN:VEVENT', `UID:${icsEscape(uid)}`, `DTSTAMP:${utcStamp()}`, `SUMMARY:${icsEscape(item.title)}`,
-    range.allDay ? `DTSTART;VALUE=DATE:${range.startDate.replace(/-/g, '')}` : `DTSTART:${range.startDate.replace(/[-:]/g, '')}`,
-    range.allDay ? `DTEND;VALUE=DATE:${range.endDate.replace(/-/g, '')}` : `DTEND:${range.endDate.replace(/[-:]/g, '')}`,
+    range.allDay ? `DTSTART;VALUE=DATE:${range.startDate.replace(/-/g, '')}` : `DTSTART;TZID=America/Chicago:${range.startDate.replace(/[-:]/g, '')}`,
+    range.allDay ? `DTEND;VALUE=DATE:${range.endDate.replace(/-/g, '')}` : `DTEND;TZID=America/Chicago:${range.endDate.replace(/[-:]/g, '')}`,
     item.location ? `LOCATION:${icsEscape(item.location)}` : null,
     description ? `DESCRIPTION:${icsEscape(description)}` : null,
     item.url ? `URL:${icsEscape(item.url)}` : null,

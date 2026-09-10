@@ -57,7 +57,7 @@ export default function AnnouncementsBrowser({ items }) {
     <section className="announcement-list-section">
       <div className="announcement-list-heading"><div><div className="eyebrow">All announcements</div><p>Latest updates from the College, C.O.D.E., departments, and our engineering community.</p></div><label><span>Sort by</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label></div>
       <p className="sr-only" role="status" aria-live="polite">{filtered.length} announcements match the selected filters.</p>
-      {visible.length ? <div className="announcement-list">{visible.map(item => {
+      {!items.length ? <div className="empty-results announcement-empty"><h2>No announcements right now.</h2><p>More updates are coming soon, so check back later.</p></div> : visible.length ? <div className="announcement-list">{visible.map(item => {
         const itemCategory = announcementCategory(item.category);
         return <article className="announcement-row" key={item.id}><div className="announcement-category-pill"><span aria-hidden="true">{categoryMark(itemCategory)}</span>{itemCategory}</div><div className="announcement-row-title"><h2><Link href={`/announcements/${item.id}`}>{item.title}</Link></h2><p>{item.source}</p></div><p className="announcement-preview">{item.body}</p><time dateTime={publicationValue(item)}>{displayDate(item)}</time><Link className="announcement-row-action" href={`/announcements/${item.id}`} aria-label={`Read ${item.title}`}>→</Link></article>;
       })}</div> : <div className="empty-results"><h2>No matching announcements</h2><p>Clear a filter or choose a broader option.</p></div>}

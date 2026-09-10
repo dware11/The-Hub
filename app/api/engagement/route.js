@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, isDemoMode } from '../../../lib/supabaseServerClient';
 import { validEngagement } from '../../../lib/engagement';
+import { consumeRateLimit, requestFingerprint } from '../../../lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,7 @@ function accepted() {
 
 export async function POST(request) {
   try {
+    if (!consumeRateLimit('engagement', requestFingerprint(request.headers), { limit: 120, windowMs: 60 * 1000 })) return accepted();
     const size = Number(request.headers.get('content-length') || 0);
     if (size > 2048) return accepted();
     const payload = await request.json();

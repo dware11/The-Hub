@@ -4,15 +4,18 @@ import { getEvent } from '../../../lib/data';
 import CalendarActions from '../../../components/CalendarActions';
 import EngagementTracker, { TrackedExternalLink } from '../../../components/EngagementTracker';
 import ReportIssueForm from '../../../components/ReportIssueForm';
+import { recurringOccurrence } from '../../../lib/eventRecurrence';
 
 function displayDate(date) {
   return new Date(date + 'T00:00:00').toLocaleDateString();
 }
 
-export default async function EventDetail({ params }) {
+export default async function EventDetail({ params, searchParams }) {
   const { id } = await params;
-  const e = await getEvent(id);
-  if (!e) return notFound();
+  const event = await getEvent(id);
+  if (!event) return notFound();
+  const query = await searchParams;
+  const e = recurringOccurrence(event, query?.date);
 
   return (
     <div className="page-wrap pb-16">

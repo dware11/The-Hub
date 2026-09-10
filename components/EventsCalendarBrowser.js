@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import EventsCalendar from './EventsCalendar';
 import EventFilterControls from './EventFilterControls';
-import { EVENT_FILTERS, REGISTERED_EVENT_ORGANIZATIONS, eventOrganization, matchesEventCategories, matchesEventOrganizations } from '../lib/eventCategories';
+import { EVENT_FILTERS, eventOrganizations, matchesEventCategories, matchesEventOrganizations, priorityCalendarEvents } from '../lib/eventCategories';
 import { matchesSearch } from '../lib/search';
 
 export default function EventsCalendarBrowser({ events }) {
@@ -12,12 +12,13 @@ export default function EventsCalendarBrowser({ events }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = useMemo(() => searchParams.getAll('category').filter((value) => EVENT_FILTERS.slice(1).includes(value)), [searchParams]);
-  const organizations = useMemo(() => [...new Map([...REGISTERED_EVENT_ORGANIZATIONS, ...events.map(event => ({ value: eventOrganization(event), label: eventOrganization(event) }))].filter(item => item.value).map(item => [item.value, item])).values()].sort((a,b) => a.label.localeCompare(b.label)), [events]);
+  const organizations = useMemo(() => eventOrganizations(events), [events]);
   const selectedOrganizations = useMemo(() => searchParams.getAll('organization').filter((value) => organizations.some((item) => item.value === value)), [searchParams, organizations]);
   const search = searchParams.get('q') || '';
+  const defaultCurated = selected.length === 0 && selectedOrganizations.length === 0 && !search && events.length > 35;
   const shown = useMemo(
-    () => events.filter((event) => matchesEventCategories(event, selected) && matchesEventOrganizations(event, selectedOrganizations) && matchesSearch([event.title,event.org,event.description,event.location], search)),
-    [events, selected, selectedOrganizations, search]
+    () => (defaultCurated ? priorityCalendarEvents(events) : events).filter((event) => matchesEventCategories(event, selected) && matchesEventOrganizations(event, selectedOrganizations) && matchesSearch([event.title,event.org,event.description,event.location], search)),
+    [events, selected, selectedOrganizations, search, defaultCurated]
   );
 
   function updateCategories(next) {
@@ -54,7 +55,7 @@ export default function EventsCalendarBrowser({ events }) {
 
   function updateSearch(value) { const params = new URLSearchParams(searchParams.toString()); if (value) params.set('q', value); else params.delete('q'); router.replace(`${pathname}${params.toString() ? `?${params}` : ''}`, { scroll: false }); }
   return <>
-    <EventFilterControls selected={selected} onToggle={toggle} onClear={() => updateCategories([])} selectedOrganizations={selectedOrganizations} onOrganizationToggle={toggleOrganization} onOrganizationClear={() => updateOrganizations([])} onClearAll={clearAll} count={shown.length} organizations={organizations} />
+    <EventFilterControls selected={selected} onToggle={toggle} onClear={() => updateCategories([])} selectedOrganizations={selectedOrganizations} onOrganizationToggle={toggleOrganization} onOrganizationClear={() => updateOrganizations([])} onClearAll={clearAll} count={shown.length} organizations={organizations} defaultCurated={defaultCurated} />
     {!shown.length && <div className="empty-results" role="status"><h2>No matching events</h2><p>Clear one or more category filters, or check back as verified events are added.</p></div>}
     <EventsCalendar events={shown} />
   </>;

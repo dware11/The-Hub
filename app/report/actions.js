@@ -1,9 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
+import { after } from 'next/server';
 import { createServerSupabaseClient, isDemoMode } from '../../lib/supabaseServerClient';
 import { notifyIssueReport } from '../../lib/notifications';
 import { getViewer, isAdmin } from '../../lib/auth';
+import { consumeRateLimit, requestFingerprint } from '../../lib/rateLimit';
 
 const CONTENT_ISSUES = new Set(['Broken link', 'Wrong date/deadline', 'Wrong information', 'Duplicate', 'Event canceled/changed', 'Other']);
 const SITE_ISSUES = new Set(['Sign-in issue', 'Submission issue', 'Calendar/display issue', 'Page error', 'Accessibility issue', 'Other']);
@@ -27,6 +30,11 @@ export async function createIssueReport(input) {
   if (!(pageUrl.startsWith('/') || /^https?:\/\//i.test(pageUrl))) return { ok: false, error: 'The reported page address is invalid.' };
   if (contentType && !contentId) return { ok: false, error: 'The content reference is invalid.' };
 
+  const requestHeaders = await headers();
+  if (!consumeRateLimit('issue-report', requestFingerprint(requestHeaders), { limit: 5, windowMs: 10 * 60 * 1000 })) {
+    return { ok: false, error: 'Please wait a few minutes before sending another report.' };
+  }
+
   if (isDemoMode) return { ok: true, demo: true };
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.from('issue_reports').insert({
@@ -39,7 +47,8 @@ export async function createIssueReport(input) {
   });
   if (error) return { ok: false, error: 'The report could not be saved. Please try again.' };
 
-  void notifyIssueReport(issueType).then(result => {
+  after(async () => {
+    const result = await notifyIssueReport(issueType);
     if (!result.ok && !result.disabled) console.error('Issue-report notification could not be delivered.');
   });
   return { ok: true };

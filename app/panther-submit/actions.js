@@ -5,6 +5,7 @@ import { getViewer, canSubmit } from '../../lib/auth';
 import { createServerSupabaseClient, isDemoMode } from '../../lib/supabaseServerClient';
 import { validateSubmission } from '../../lib/validation';
 import { notifyOperationalEvent } from '../../lib/notifications';
+import { consumeRateLimit } from '../../lib/rateLimit';
 
 const CONTENT_TABLES = Object.freeze({
   opportunity: 'opportunities',
@@ -35,6 +36,8 @@ const SOURCE_TYPES = new Set([
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_COMBINED_BYTES = 25 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 40_000_000;
+const MAX_IMAGE_DIMENSION = 12_000;
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/png',
@@ -110,6 +113,10 @@ export async function beginIntakeAction(input) {
     viewer = await requireContributor();
   } catch (error) {
     return { ok: false, error: error.message };
+  }
+
+  if (!consumeRateLimit('intake-session', viewer.user.id, { limit: 10, windowMs: 15 * 60 * 1000 })) {
+    return { ok: false, error: 'Please wait a few minutes before starting another submission.' };
   }
 
   const contentType = CONTENT_TABLES[input?.contentType] ? input.contentType : null;
@@ -207,6 +214,53 @@ function signatureMatches(bytes, mimeType) {
   return false;
 }
 
+function imageDimensions(bytes, mimeType) {
+  if (mimeType === 'image/png' && bytes.length >= 24) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  if (mimeType !== 'image/jpeg') return null;
+  for (let offset = 2; offset + 9 < bytes.length;) {
+    if (bytes[offset] !== 0xff) { offset += 1; continue; }
+    while (bytes[offset] === 0xff) offset += 1;
+    const marker = bytes[offset];
+    if (marker === 0xd8 || marker === 0xd9) { offset += 1; continue; }
+    if (offset + 2 >= bytes.length) break;
+    const segmentLength = (bytes[offset + 1] << 8) + bytes[offset + 2];
+    if (segmentLength < 2 || offset + segmentLength >= bytes.length) break;
+    if ([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)) {
+      return {
+        height: (bytes[offset + 4] << 8) + bytes[offset + 5],
+        width: (bytes[offset + 6] << 8) + bytes[offset + 7],
+      };
+    }
+    offset += segmentLength + 1;
+  }
+  return null;
+}
+
+async function failStoredSource(supabase, sessionId, source, warning) {
+  if (source.storage_path) await supabase.storage.from('intake-sources').remove([source.storage_path]);
+  await supabase.from('source_artifacts').update({ processing_status: 'failed', warnings: [warning] }).eq('id', source.id).eq('intake_session_id', sessionId);
+  await supabase.from('intake_sessions').update({ state: 'failed' }).eq('id', sessionId);
+}
+
+export async function abandonIntakeAction(intakeSessionId) {
+  let viewer;
+  try { viewer = await requireContributor(); } catch { return { ok: false }; }
+  if (isDemoMode) return { ok: true, demo: true };
+  if (!/^[0-9a-f-]{36}$/i.test(intakeSessionId || '')) return { ok: false };
+  const supabase = await createServerSupabaseClient();
+  const { data: session } = await supabase.from('intake_sessions').select('id').eq('id', intakeSessionId).eq('submitter_id', viewer.role.id).maybeSingle();
+  if (!session) return { ok: false };
+  const { data: sources } = await supabase.from('source_artifacts').select('id, storage_path').eq('intake_session_id', session.id);
+  const paths = (sources || []).map(source => source.storage_path).filter(Boolean);
+  if (paths.length) await supabase.storage.from('intake-sources').remove(paths);
+  await supabase.from('source_artifacts').delete().eq('intake_session_id', session.id);
+  await supabase.from('intake_sessions').update({ state: 'failed' }).eq('id', session.id);
+  return { ok: true };
+}
+
 export async function finalizeIntakeAction(input) {
   let viewer;
   try {
@@ -237,16 +291,32 @@ export async function finalizeIntakeAction(input) {
     .maybeSingle();
   if (!session) return { ok: false, error: 'The intake session could not be verified.' };
 
-  const { data: sourceRows, error: sourceError } = await supabase.from('source_artifacts').select('id, storage_path, mime_type').eq('intake_session_id', session.id);
+  const { data: sourceRows, error: sourceError } = await supabase.from('source_artifacts').select('id, storage_path, mime_type, byte_size').eq('intake_session_id', session.id);
   if (sourceError) return { ok: false, error: 'The source evidence could not be verified.' };
   for (const source of sourceRows || []) {
     if (!source.storage_path) continue;
     const { data: file, error: downloadError } = await supabase.storage.from('intake-sources').download(source.storage_path);
     if (downloadError || !file) return { ok: false, error: 'A source upload is missing. Please upload it again.' };
-    const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+    const actualBytes = file.size;
+    const limit = source.mime_type === 'application/pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES;
+    if (!Number.isSafeInteger(actualBytes) || actualBytes <= 0 || actualBytes > limit) {
+      await failStoredSource(supabase, session.id, source, 'Stored file exceeded its server-side size limit.');
+      return { ok: false, error: 'A source file exceeded its upload limit and was removed. Upload a smaller file.' };
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
     if (!signatureMatches(bytes, source.mime_type)) {
-      await supabase.from('source_artifacts').update({ processing_status: 'failed', warnings: ['File contents did not match the declared format.'] }).eq('id', source.id).eq('intake_session_id', session.id);
+      await failStoredSource(supabase, session.id, source, 'File contents did not match the declared format.');
       return { ok: false, error: 'A source file did not match its declared format. Upload a valid PDF, PNG, JPG, or JPEG.' };
+    }
+    if (source.mime_type.startsWith('image/')) {
+      const dimensions = imageDimensions(bytes, source.mime_type);
+      if (!dimensions || dimensions.width > MAX_IMAGE_DIMENSION || dimensions.height > MAX_IMAGE_DIMENSION || dimensions.width * dimensions.height > MAX_IMAGE_PIXELS) {
+        await failStoredSource(supabase, session.id, source, 'Image dimensions exceeded the server-side processing limit.');
+        return { ok: false, error: 'A source image was too large to process safely and was removed. Upload a smaller image.' };
+      }
+    }
+    if (actualBytes !== Number(source.byte_size)) {
+      await supabase.from('source_artifacts').update({ byte_size: actualBytes }).eq('id', source.id).eq('intake_session_id', session.id);
     }
   }
 
@@ -276,7 +346,10 @@ export async function finalizeIntakeAction(input) {
   }));
   if (suggestionRows.length) {
     const { error: suggestionError } = await supabase.from('field_suggestions').insert(suggestionRows);
-    if (suggestionError) return { ok: false, error: 'Parser evidence could not be saved. The submission has not been finalized.' };
+    if (suggestionError) {
+      await supabase.from('intake_sessions').update({ state: 'failed' }).eq('id', session.id);
+      return { ok: false, error: 'Parser evidence could not be saved. The submission has not been finalized.' };
+    }
   }
 
   const { data: content, error: contentError } = await supabase
@@ -290,7 +363,10 @@ export async function finalizeIntakeAction(input) {
     .select('id, status')
     .single();
 
-  if (contentError) return { ok: false, error: 'The submission could not be saved.' };
+  if (contentError) {
+    await supabase.from('intake_sessions').update({ state: 'failed' }).eq('id', session.id);
+    return { ok: false, error: 'The submission could not be saved.' };
+  }
 
   await supabase
     .from('intake_sessions')

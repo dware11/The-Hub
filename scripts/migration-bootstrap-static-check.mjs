@@ -32,6 +32,8 @@ const expectedOrder = [
   '20260909042638_phase5_workflow_repairs.sql',
   '20260909043658_phase5_duplicate_trigger_acl.sql',
   '20260909145833_pre_hosting_v1_multiday_reports_upload_hardening.sql',
+  '20260910021330_hosted_mobile_security_hardening.sql',
+  '20260910044904_final_hosted_uat_admin_controls.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -61,6 +63,7 @@ const dataApiPrivileges = readMigration('20260909001132_normalize_v1_data_api_pr
 const workflowRepairs = readMigration('20260909042638_phase5_workflow_repairs.sql');
 const workflowTriggerAcl = readMigration('20260909043658_phase5_duplicate_trigger_acl.sql');
 const preHosting = readMigration('20260909145833_pre_hosting_v1_multiday_reports_upload_hardening.sql');
+const finalHostedUat = readMigration('20260910044904_final_hosted_uat_admin_controls.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -155,5 +158,9 @@ assert.doesNotMatch(workflowRepairs, /grant\s+all/i, 'Workflow repair must never
 assert.ok(workflowTriggerAcl.includes('revoke all on function public.flag_possible_duplicate() from public, anon, authenticated'), 'Duplicate trigger function must not be callable through the Data API');
 for (const control of ['add column if not exists end_date date', 'create table public.issue_reports', 'alter table public.issue_reports enable row level security', 'anyone creates open issue reports', 'admins read issue reports', 'add column if not exists source_text text', 'allowed_mime_types']) assert.ok(preHosting.includes(control), `Pre-hosting control missing: ${control}`);
 assert.doesNotMatch(preHosting, /grant\s+all/i, 'Pre-hosting migration must not grant broad privileges');
+for (const control of ['manage_home_event', 'hard_delete_content', 'update_my_display_name', 'Home Spotlight is limited to 5 items']) assert.ok(finalHostedUat.includes(control), `Final hosted UAT control missing: ${control}`);
+assert.match(finalHostedUat, /if not public\.is_super_admin\(\)/, 'Permanent deletion must be restricted to super_admin');
+assert.match(finalHostedUat, /revoke all on function public\.hard_delete_content\(text,uuid,text\) from public,anon,authenticated/, 'Permanent deletion RPC must be fail-closed by default');
+assert.doesNotMatch(finalHostedUat, /grant\s+all/i, 'Final hosted UAT migration must not grant broad privileges');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);

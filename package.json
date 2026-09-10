@@ -16,6 +16,7 @@
     ,"test:editorial": "node scripts/editorial-filter-static-check.mjs"
     ,"test:workflow": "node scripts/phase5-workflow-static-check.mjs"
     ,"test:prehosting": "node scripts/prehosting-v1-static-check.mjs"
+    ,"test:hosted-hardening": "node scripts/hosted-mobile-security-static-check.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
