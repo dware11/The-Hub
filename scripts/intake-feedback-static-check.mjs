@@ -8,6 +8,7 @@ const migration = read('supabase/migrations/202609020002_parser_feedback_and_rev
 const submitForm = read('components/PantherSubmitForm.js');
 const parserData = read('lib/parserFeedbackData.js');
 const systemInsights = read('app/admin/system/page.js');
+const parserActivityPanel = read('components/ParserActivityPanel.js');
 const review = read('app/admin/review/ReviewQueue.js') + read('lib/adminData.js');
 const currentFeedbackMigration = read('supabase/migrations/20260928134549_submission_clarity_and_super_admin_parser_feedback.sql');
 const actions = read('app/panther-submit/actions.js');
@@ -34,7 +35,9 @@ assert.match(currentFeedbackMigration, /super admins read parser feedback/);
 assert.match(parserData, /getParserActivity/);
 for (const table of ['intake_sessions', 'source_artifacts', 'field_suggestions', 'intake_parser_feedback']) assert.ok(parserData.includes(`.from('${table}')`), `Parser activity is missing ${table} evidence.`);
 assert.doesNotMatch(parserData, /source_text/);
-for (const copy of ['Recent extraction attempts', 'Extraction failed', 'Incomplete workflow', 'No parser feedback was submitted']) assert.ok(systemInsights.includes(copy), `System Insights parser review is missing: ${copy}`);
+assert.match(systemInsights, /<ParserActivityPanel activities=\{parserActivity\}/);
+for (const copy of ['View parser activity', 'Recent extraction attempts', 'Extraction failed', 'Incomplete workflow', 'No parser feedback was submitted']) assert.ok(parserActivityPanel.includes(copy), `System Insights parser review is missing: ${copy}`);
+for (const filter of ['Outcome', 'Content', 'Source', 'Feedback']) assert.ok(parserActivityPanel.includes(`<span>${filter}</span>`), `Parser activity filter is missing: ${filter}`);
 assert.match(submitForm, /Your submission is still complete/);
 assert.match(submitForm, /if \(!artifacts\.length && !pastedText\.trim\(\)\)[\s\S]{0,180}setStep\(3\)/);
 assert.match(review, /Submission details &amp; source/);
