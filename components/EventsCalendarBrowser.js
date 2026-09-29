@@ -56,7 +56,7 @@ export default function EventsCalendarBrowser({ events }) {
   function updateSearch(value) { const params = new URLSearchParams(searchParams.toString()); if (value) params.set('q', value); else params.delete('q'); router.replace(`${pathname}${params.toString() ? `?${params}` : ''}`, { scroll: false }); }
   return <>
     <EventFilterControls selected={selected} onToggle={toggle} onClear={() => updateCategories([])} selectedOrganizations={selectedOrganizations} onOrganizationToggle={toggleOrganization} onOrganizationClear={() => updateOrganizations([])} onClearAll={clearAll} count={shown.length} organizations={organizations} defaultCurated={defaultCurated} />
-    {!shown.length && <div className="empty-results" role="status"><h2>No matching events</h2><p>Clear one or more category filters, or check back as verified events are added.</p></div>}
+    {!shown.length && <div className="empty-results" role="status"><h2>No matching events</h2><p>Clear one or more category filters, or check back as new events are published.</p></div>}
     <EventsCalendar events={shown} />
   </>;
 }

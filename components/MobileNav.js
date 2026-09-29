@@ -8,7 +8,7 @@ function closeOnNavigate(setOpen) {
   return () => setOpen(false);
 }
 
-export default function MobileNav({ reviewer, admin, superAdmin }) {
+export default function MobileNav({ reviewer, contributor, admin, superAdmin }) {
   const [open, setOpen] = useState(false);
   const [discoverOpen, setDiscoverOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -45,9 +45,10 @@ export default function MobileNav({ reviewer, admin, superAdmin }) {
             </div>}
           </div>
           <Link href="/about" onClick={closeMenu}>Who Is C.O.D.E.?</Link>
+          {contributor && <Link href="/panther-submit" aria-current={pathname.startsWith('/panther-submit') || pathname.startsWith('/submit/') ? 'page' : undefined} onClick={closeMenu}>Submit to Hub</Link>}
           {reviewer && <div className="mobile-nav-group">
             <div className="mobile-workspace-trigger">
-              <Link href="/admin" aria-current={pathname === '/admin' ? 'page' : undefined} onClick={closeMenu}>Workspace</Link>
+              <Link href="/workspace" aria-current={pathname === '/workspace' || pathname === '/admin' ? 'page' : undefined} onClick={closeMenu}>Workspace</Link>
               <button type="button" aria-label="Toggle Workspace links" aria-expanded={workspaceOpen} onClick={() => setWorkspaceOpen(value => !value)}>{workspaceOpen ? '−' : '+'}</button>
             </div>
             {workspaceOpen && <div>
@@ -55,7 +56,7 @@ export default function MobileNav({ reviewer, admin, superAdmin }) {
               <Link href="/admin/committee" onClick={closeMenu}>Contributor Approvals</Link>
               {admin && <><Link href="/admin/content" onClick={closeMenu}>Content Management</Link><Link href="/admin/people" onClick={closeMenu}>People &amp; Access</Link></>}
               <Link href="/admin/analytics" onClick={closeMenu}>Analytics</Link>
-              {superAdmin && <><Link href="/admin/history" onClick={closeMenu}>History</Link><Link href="/admin/system-insights" onClick={closeMenu}>System Insights</Link></>}
+              {superAdmin && <><Link href="/admin/issues" onClick={closeMenu}>Issues</Link><Link href="/admin/history" onClick={closeMenu}>History</Link><Link href="/admin/system-insights" onClick={closeMenu}>System Insights</Link></>}
             </div>}
           </div>}
         </div>

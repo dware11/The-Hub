@@ -7,6 +7,8 @@ const legacyAction = read('app/submit/actions.js');
 const migration = read('supabase/migrations/202609020002_parser_feedback_and_review_evidence.sql');
 const submitForm = read('components/PantherSubmitForm.js');
 const review = read('app/admin/review/ReviewQueue.js') + read('lib/adminData.js');
+const currentFeedbackMigration = read('supabase/migrations/20260928134549_submission_clarity_and_super_admin_parser_feedback.sql');
+const actions = read('app/panther-submit/actions.js');
 
 assert.match(legacyPage, /redirect\('\/panther-submit\?from=legacy-submit'\)/);
 assert.doesNotMatch(legacyPage, /SubmitForm|uploadFlyer/);
@@ -22,9 +24,13 @@ for (const control of [
 for (const prohibited of ['ip_address', 'user_agent', 'device_id', 'email_address', 'corrected_value', 'raw_text']) {
   assert.doesNotMatch(migration, new RegExp(`\\n\\s*${prohibited}\\s+`, 'i'), `Prohibited feedback column: ${prohibited}`);
 }
-assert.match(submitForm, /Optional: how accurate were the suggestions/);
+assert.match(submitForm, /Optional: parser quality feedback/);
+assert.doesNotMatch(submitForm, /View technical details/);
+assert.match(actions, /isSuperAdmin\(viewer\)/);
+assert.match(currentFeedbackMigration, /role = 'super_admin'/);
+assert.match(currentFeedbackMigration, /super admins read parser feedback/);
 assert.match(submitForm, /Your submission is still complete/);
-assert.match(submitForm, /if \(!artifacts\.length && !pastedText\.trim\(\)\)[\s\S]{0,180}setStep\(4\)/);
-assert.match(review, /Private source evidence/);
+assert.match(submitForm, /if \(!artifacts\.length && !pastedText\.trim\(\)\)[\s\S]{0,180}setStep\(3\)/);
+assert.match(review, /Submission details &amp; source/);
 assert.match(review, /createSignedUrl\(artifact\.storage_path, 600\)/);
-console.log('Intake checks passed: legacy redirect, private reviewer evidence, and owner-bound optional parser feedback.');
+console.log('Intake checks passed: legacy redirect, private reviewer evidence, and super-admin-only parser feedback.');

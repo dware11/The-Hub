@@ -7,5 +7,8 @@ export async function POST(request) {
     const supabase = await createServerSupabaseClient();
     await supabase.auth.signOut();
   }
-  return NextResponse.redirect(origin, { status: 302 });
+  const response = NextResponse.redirect(origin, { status: 303 });
+  response.headers.set('Cache-Control', 'no-store, max-age=0');
+  response.headers.set('Clear-Site-Data', '"cache"');
+  return response;
 }

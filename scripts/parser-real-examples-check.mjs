@@ -25,6 +25,8 @@ async function loadModule(filePath) {
 
 const parserModule = await loadModule(path.join(projectRoot, 'lib', 'multiSourceParser.js'));
 const { parseMultipleSources } = parserModule.namespace;
+const validationModule = await loadModule(path.join(projectRoot, 'lib', 'validation.js'));
+const { validateSubmission } = validationModule.namespace;
 
 const conocoPhillipsEmail = `
 Hello Professors and Deans,
@@ -88,6 +90,37 @@ const tiInternship = await parseMultipleSources({
 assert.equal(tiInternship.fields.title, 'Design Verification Engineering Intern - Bachelors');
 assert.equal(tiInternship.fields.deadline, '2026-10-03');
 
+const fullTimePosting = await parseMultipleSources({
+  contentType: 'opportunity',
+  artifacts: [],
+  pastedText: `Amazon Web Services\nSoftware Development Engineer, Data Services\nFull-time role\nBachelor's degree in Computer Science or a related field required.\nApply at https://www.amazon.jobs/`,
+});
+assert.ok(fullTimePosting.tags.categories.includes('Full-Time'));
+assert.deepEqual(Array.from(fullTimePosting.tags.classifications), ['Senior', 'Graduating Senior', 'Graduate Student']);
+for (const earlyYear of ['Freshman', 'Sophomore', 'Junior']) assert.ok(!fullTimePosting.tags.classifications.includes(earlyYear));
+const rollingOpportunity = await parseMultipleSources({ contentType: 'opportunity', artifacts: [], pastedText: 'Engineering fellowship applications are open until filled.' });
+assert.equal(rollingOpportunity.fields.deadlineType, 'rolling');
+const noDeadlineOpportunity = await parseMultipleSources({ contentType: 'opportunity', artifacts: [], pastedText: 'Engineering research opportunity. No application deadline.' });
+assert.equal(noDeadlineOpportunity.fields.deadlineType, 'no_deadline');
+
+const opportunityBase = {
+  title: 'Full-Time Workflow Test', org: 'C.O.D.E.', type: 'Full-Time', description: 'Validation fixture',
+  majors: ['All majors'], classifications: fullTimePosting.tags.classifications, location: '', work_mode: 'Remote',
+  compensation_type: 'Paid', eligibility: "Bachelor's degree required", link: 'https://example.com/apply',
+  contact_name: 'Test Contact', contact_email: 'test@example.com',
+};
+for (const deadline_type of ['rolling']) {
+  const validated = validateSubmission('opportunity', { ...opportunityBase, deadline_type, deadline: '' });
+  assert.equal(validated.deadline_type, deadline_type);
+  assert.equal(validated.deadline, null);
+  assert.equal(validated.type, 'Full-Time');
+}
+for (const deadline_type of ['no_deadline', 'not_provided']) {
+  assert.throws(() => validateSubmission('opportunity', { ...opportunityBase, deadline_type, deadline: '' }), /Deadline is required/);
+}
+assert.equal(validateSubmission('opportunity', { ...opportunityBase, deadline_type: 'specific_date', deadline: '2026-11-15' }).deadline, '2026-11-15');
+assert.throws(() => validateSubmission('opportunity', { ...opportunityBase, deadline_type: 'specific_date', deadline: '' }), /Deadline is required/);
+
 const panthersInventPosting = `
 Panther's Invent 2026
 Dates: September 11–13, 2026
@@ -110,4 +143,4 @@ assert.equal(panthersInvent.fields.contactEmail, 'dgsims@pvamu.edu');
 assert.match(panthersInvent.fields.link, /^https:\/\/www\.eventbrite\.com/);
 assert.ok(panthersInvent.tags.categories.includes('Competition'));
 
-console.log('Real parser examples passed: ConocoPhillips email, Disney Tech session, and Panther\'s Invent fields/tags/review warnings.');
+console.log('Real parser examples passed: source extraction, Full-Time eligibility defaults, and every deadline state.');

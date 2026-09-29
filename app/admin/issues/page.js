@@ -1,4 +1,5 @@
-import { getViewer, isAdmin } from '../../../lib/auth';
+import { redirect } from 'next/navigation';
+import { getViewer, isSuperAdmin } from '../../../lib/auth';
 import { createServerSupabaseClient, isDemoMode } from '../../../lib/supabaseServerClient';
 import IssueManager from './IssueManager';
 
@@ -12,6 +13,7 @@ async function getIssues() {
 
 export default async function IssuesPage() {
   const viewer = await getViewer();
-  if (!viewer.user || !isAdmin(viewer)) return <div className="auth-card"><h1>Administrator access required</h1><p>Issue reports are restricted to administrators and super administrators.</p></div>;
+  if (!viewer.user) redirect('/auth/signin?next=%2Fadmin%2Fissues');
+  if (!isSuperAdmin(viewer)) redirect('/admin');
   return <div className="review-page workspace-subpage"><header className="workspace-page-heading"><div><div className="eyebrow">Support operations</div><h1>Issues</h1><p>Review reported content and site problems.</p></div></header><IssueManager issues={await getIssues()} /></div>;
 }

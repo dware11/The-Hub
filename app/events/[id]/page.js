@@ -35,11 +35,6 @@ export default async function EventDetail({ params, searchParams }) {
           <h1 className="text-2xl mb-2">{e.title}</h1>
           <div className="flex items-center gap-2 text-sm text-slate mb-6">
             Hosted by {e.org}
-            {e.verified && (
-              <span className="inline-flex items-center gap-1 font-mono text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
-                ✓ Verified
-              </span>
-            )}
           </div>
 
           <Section title="About this event">
@@ -49,7 +44,7 @@ export default async function EventDetail({ params, searchParams }) {
           <Section title="Details">
             <ul className="text-sm leading-loose text-ink/80 list-disc pl-5">
               <li><strong className="text-ink">Date &amp; time:</strong> {displayDate(e.date)}{e.end_date ? ` – ${displayDate(e.end_date)}` : ''} {e.time && `· ${e.time}`}</li>
-              <li><strong className="text-ink">Location:</strong> {e.location}</li>
+              <li><strong className="text-ink">Location:</strong> {e.location || 'Not provided'}</li>
             </ul>
           </Section>
         </div>
@@ -141,7 +136,7 @@ export default async function EventDetail({ params, searchParams }) {
               </TrackedExternalLink>
             </SideCard>
           )}
-          <ReportIssueForm contentType="event" contentId={e.id} label="Report an issue" />
+          <ReportIssueForm contentType="event" contentId={e.id} contentTitle={e.title} label="Report an issue with this event" />
         </div>
       </div>
     </div>

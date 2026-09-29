@@ -18,3 +18,15 @@ The script requires a confirmed exact-email Auth user, refuses to run after an a
 6. Committee testing must cover external guest email, PVAMU email without a role, contributor request, reviewer approval/rejection, role revocation, and blocked direct table/RPC edits. Verify private intake files remain signed and inaccessible to public users.
 7. Configure optional generic Resend notifications only in the deployment dashboard (`RESEND_API_KEY`, verified `DIGEST_FROM_EMAIL`, and `REQUEST_NOTIFICATION_TO_EMAIL` or the existing digest recipient). Messages contain no requester names, emails, IDs, or source details; missing configuration is disabled and never blocks submissions or approvals.
 8. Rollback: disable Email provider sign-in, revoke active roles, preserve audit rows, and use the prior app build. Do not delete auth users or intake files as a rollback shortcut.
+
+## Magic-link template invariant (staging)
+
+The app passes an allowlisted callback URL shaped like `/auth/confirm?next=...` in `emailRedirectTo`. For the linked staging project, use one static first-party callback in both Supabase Auth **Magic link** and **Confirm signup** templates:
+
+```html
+<a href="https://code-engineering-hub-staging.vercel.app/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=%2Fworkspace">
+  Continue to C.O.D.E. Engineering Hub
+</a>
+```
+
+Do not append parameters directly to `{{ .RedirectTo }}` and do not nest `{{ .RedirectTo }}` inside `next`. Go's HTML template sanitizer can replace that dynamic URL with `#ZgotmplZ`, and nested callbacks can create malformed Gmail redirect targets. If invite emails are enabled, use the same first-party structure with `type=invite`. The staging Site URL must be `https://code-engineering-hub-staging.vercel.app`, and the redirect allowlist must include `https://code-engineering-hub-staging.vercel.app/auth/confirm`; configure both in the Supabase dashboard, not in application secrets.

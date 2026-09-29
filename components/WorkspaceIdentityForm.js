@@ -16,7 +16,7 @@ export default function WorkspaceIdentityForm({ email }) {
     if (result.ok && !result.demo) window.location.reload();
   }
   return <form className="workspace-name-form" onSubmit={submit}>
-    <strong>Finish your workspace identity</strong>
+    <strong>Complete your Hub profile</strong>
     <small>{email}</small>
     <label><span>Full name</span><input required minLength={2} maxLength={120} autoComplete="name" value={name} onChange={event => setName(event.target.value)} /></label>
     <button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save name'}</button>

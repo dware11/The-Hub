@@ -74,10 +74,10 @@ function MenuLink({ href, children, active }) {
   return <Link role="menuitem" href={href} aria-current={active ? 'page' : undefined}>{children}</Link>;
 }
 
-export default function DesktopNavMenus({ reviewer, admin, superAdmin }) {
+export default function DesktopNavMenus({ reviewer, contributor, admin, superAdmin }) {
   const pathname = usePathname();
   const discoverActive = ['/events', '/opportunities', '/announcements'].some(route => pathname === route || pathname.startsWith(`${route}/`));
-  const workspaceActive = pathname === '/admin' || pathname.startsWith('/admin/');
+  const workspaceActive = pathname === '/workspace' || pathname === '/admin' || pathname.startsWith('/admin/');
   return (
     <>
       <Link href="/" className={pathname === '/' ? 'active' : ''} aria-current={pathname === '/' ? 'page' : undefined}>Home</Link>
@@ -87,8 +87,9 @@ export default function DesktopNavMenus({ reviewer, admin, superAdmin }) {
         <MenuLink href="/announcements" active={pathname.startsWith('/announcements')}>Announcements</MenuLink>
       </MenuGroup>
       <Link href="/about">Who Is C.O.D.E.?</Link>
+      {contributor && <Link href="/panther-submit" className={pathname.startsWith('/panther-submit') || pathname.startsWith('/submit/') ? 'active' : ''}>Submit to Hub</Link>}
       {reviewer && (
-        <MenuGroup label="Workspace" href="/admin" menuLabel="Workspace links" active={workspaceActive}>
+        <MenuGroup label="Workspace" href="/workspace" menuLabel="Workspace links" active={workspaceActive}>
           <MenuLink href="/admin" active={pathname === '/admin'}>Overview</MenuLink>
           <MenuLink href="/admin/review">Review Queue</MenuLink>
           <MenuLink href="/admin/committee">Contributor Approvals</MenuLink>
@@ -99,6 +100,7 @@ export default function DesktopNavMenus({ reviewer, admin, superAdmin }) {
           <MenuLink href="/admin/analytics">Analytics</MenuLink>
           {superAdmin && <>
             <span className="desktop-nav-menu-label">Super Admin</span>
+            <MenuLink href="/admin/issues">Issues</MenuLink>
             <MenuLink href="/admin/history">History</MenuLink>
             <MenuLink href="/admin/system-insights">System Insights</MenuLink>
           </>}

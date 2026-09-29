@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { optionalSafeAuthDestination } from '../lib/authRedirects';
 
 function BrandHeader() {
   return (
@@ -90,6 +91,10 @@ export default function AuthConfirmation({ tokenHash, type, next }) {
     : state === 'success'
       ? "You're signed in."
       : 'This sign-in link is no longer valid.';
+  const retryDestination = optionalSafeAuthDestination(next);
+  const retryHref = retryDestination
+    ? `/auth/signin?next=${encodeURIComponent(retryDestination)}`
+    : '/auth/signin';
 
   return (
     <section className="auth-confirm-card" aria-labelledby="auth-confirm-title">
@@ -111,7 +116,7 @@ export default function AuthConfirmation({ tokenHash, type, next }) {
 
       <div className="auth-confirm-actions">
         {state === 'error' && (
-          <Link className="auth-confirm-button auth-confirm-button-primary" href="/auth/signin">
+          <Link className="auth-confirm-button auth-confirm-button-primary" href={retryHref}>
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6.5 12 13l9-6.5M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" /></svg>
             Send a New Sign-in Link
           </Link>

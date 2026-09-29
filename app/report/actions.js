@@ -5,11 +5,12 @@ import { headers } from 'next/headers';
 import { after } from 'next/server';
 import { createServerSupabaseClient, isDemoMode } from '../../lib/supabaseServerClient';
 import { notifyIssueReport } from '../../lib/notifications';
-import { getViewer, isAdmin } from '../../lib/auth';
+import { getViewer, isSuperAdmin } from '../../lib/auth';
 import { consumeRateLimit, requestFingerprint } from '../../lib/rateLimit';
+import { CONTENT_ISSUES, SITE_ISSUES } from '../../lib/issueTypes';
 
-const CONTENT_ISSUES = new Set(['Broken link', 'Wrong date/deadline', 'Wrong information', 'Duplicate', 'Event canceled/changed', 'Other']);
-const SITE_ISSUES = new Set(['Sign-in issue', 'Submission issue', 'Calendar/display issue', 'Page error', 'Accessibility issue', 'Other']);
+const CONTENT_ISSUE_SET = new Set(CONTENT_ISSUES);
+const SITE_ISSUE_SET = new Set(SITE_ISSUES);
 
 function clean(value, max) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -18,7 +19,7 @@ function clean(value, max) {
 export async function createIssueReport(input) {
   const contentType = ['opportunity', 'event'].includes(input?.contentType) ? input.contentType : null;
   const contentId = contentType && /^[0-9a-f-]{36}$/i.test(input?.contentId || '') ? input.contentId : null;
-  const allowed = contentType ? CONTENT_ISSUES : SITE_ISSUES;
+  const allowed = contentType ? CONTENT_ISSUE_SET : SITE_ISSUE_SET;
   const issueType = clean(input?.issueType, 80);
   const description = clean(input?.description, 3000);
   const reporterEmail = clean(input?.reporterEmail, 320).toLowerCase() || null;
@@ -56,9 +57,9 @@ export async function createIssueReport(input) {
 
 export async function updateIssueStatus(id, status) {
   if (!['in_review', 'resolved'].includes(status)) return { ok: false, error: 'Invalid issue status.' };
-  if (isDemoMode) return { ok: true, demo: true };
   const viewer = await getViewer();
-  if (!viewer.user || !isAdmin(viewer)) return { ok: false, error: 'Administrator access required.' };
+  if (!viewer.user || !isSuperAdmin(viewer)) return { ok: false, error: 'Super Admin access required.' };
+  if (isDemoMode) return { ok: true, demo: true };
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.from('issue_reports').update({
     status,

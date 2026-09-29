@@ -64,6 +64,6 @@ export default function AllEventsGrid({ events }) {
         <small>{event.location}</small>
       </Link>)}
     </div>
-    {!shown.length && <div className="empty-results" role="status"><h2>No matching events</h2><p>Clear one or more category filters, or check back as verified events are added.</p></div>}
+    {!shown.length && <div className="empty-results" role="status"><h2>No matching events</h2><p>Clear one or more category filters, or check back as new events are published.</p></div>}
   </>;
 }

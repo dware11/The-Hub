@@ -2,10 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { createClient, isDemoMode } from '../lib/supabaseClient';
-import { parseMultipleSources } from '../lib/multiSourceParser';
+import { extractSubmission, toSubmissionParserResult } from '../lib/submissionExtraction';
 import { abandonIntakeAction, beginIntakeAction, finalizeIntakeAction, saveParserFeedbackAction } from '../app/panther-submit/actions';
 import { MAJORS } from '../lib/sampleData';
 import { ANNOUNCEMENT_CATEGORIES } from '../lib/announcementCategories';
+import WorkspaceIdentityForm from './WorkspaceIdentityForm';
+import ReportIssueForm from './ReportIssueForm';
+import { SUBMISSION_DEADLINE_TYPES, FULL_TIME_DEFAULT_CLASSIFICATIONS, OPPORTUNITY_CLASSIFICATIONS, OPPORTUNITY_TYPES, deadlineLabel, normalizeOpportunityClassifications } from '../lib/opportunityOptions';
+import { REGISTERED_EVENT_ORGANIZATIONS } from '../lib/eventCategories';
 
 const CONTENT_TYPES = [
   { id: 'event', title: 'Event', description: 'Something students attend at a scheduled time.' },
@@ -14,13 +18,32 @@ const CONTENT_TYPES = [
 ];
 
 const RELATIONSHIPS = [
-  ['original_contact', 'I am the original contact'],
-  ['pvamu_department_referral', 'PVAMU department, faculty, or staff referral'],
-  ['student_organization_referral', 'Student organization referral'],
-  ['sponsor_referral', 'Sponsor or corporate partner referral'],
-  ['alumni_referral', 'Alumni referral'],
-  ['external_discovery', 'Found on LinkedIn, Handshake, or another external source'],
+  ['student_organization', 'Student organization'],
+  ['faculty_staff', 'Faculty / staff'],
+  ['department_college', 'Department / college representative'],
+  ['alumni', 'Alumni'],
+  ['corporate_industry', 'Corporate / industry representative'],
+  ['ambassador', 'Ambassador'],
+  ['organizer_host', 'Event organizer / host'],
+  ['general_contributor', 'General contributor / No formal affiliation'],
   ['other', 'Other'],
+];
+
+const RELATIONSHIP_STORAGE = {
+  student_organization: 'student_organization_referral',
+  faculty_staff: 'pvamu_department_referral',
+  department_college: 'pvamu_department_referral',
+  alumni: 'alumni_referral',
+  corporate_industry: 'sponsor_referral',
+  ambassador: 'other',
+  organizer_host: 'original_contact',
+  general_contributor: 'external_discovery',
+  other: 'other',
+};
+
+const APPROVED_ORGANIZATIONS = [
+  'Roy G. Perry College of Engineering',
+  ...REGISTERED_EVENT_ORGANIZATIONS.map((organization) => organization.label),
 ];
 
 const SOURCE_TYPES = [
@@ -28,36 +51,65 @@ const SOURCE_TYPES = [
   ['screenshot', 'Screenshot / Image'],
 ];
 
-const OPPORTUNITY_TYPES = ['Internship', 'Co-op', 'Research', 'Scholarship', 'Competition', 'Other'];
+const SUBMISSION_ACKNOWLEDGMENT = 'By submitting this event, I confirm that the information provided is accurate to the best of my knowledge and that I am authorized to share it or obtained it from an official or public source. C.O.D.E. Engineering Hub may rely on the information submitted and may verify, correct, or decline to publish it.';
+
 const EVENT_TYPES = ['Org meeting', 'Workshop', 'Career fair', 'Competition', 'College event', 'Other'];
-const CLASSIFICATIONS = ['All classifications', 'Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate'];
+const CLASSIFICATIONS = OPPORTUNITY_CLASSIFICATIONS;
 const WORK_MODES = ['Remote', 'Hybrid', 'In person'];
-const COMPENSATION_TYPES = ['Not specified', 'Paid', 'Funded', 'Unpaid'];
+const COMPENSATION_TYPES = ['Paid', 'Unpaid'];
 const MAX_PIXELS = 40_000_000;
 const FIELD_LABELS = {
   title: 'Title',
-  organization: 'Organization or host',
+  organization: 'Hosting organization',
   description: 'Description',
   eligibility: 'Eligibility',
   date: 'Event date',
   time: 'Time',
+  start_time: 'Start time',
+  end_time: 'End time',
   deadline: 'Application deadline',
   location: 'Location',
   link: 'Registration or application link',
-  contactName: 'Contact name',
-  contactEmail: 'Contact email',
+  source_url: 'Registration or application link',
+  contactName: 'Official contact name',
+  contactEmail: 'Official contact email',
+  contact_name: 'Official contact name',
+  contact_email: 'Official contact email',
   presenterName: 'Presenter name',
   presenterAffiliation: 'Presenter affiliation',
+  presenter_name: 'Presenter name',
+  presenter_affiliation: 'Presenter affiliation',
+};
+
+const EXTRACTION_STATUS_LABELS = {
+  success: 'Automatic extraction completed',
+  fallback: 'Manual-entry fallback used',
+};
+
+const EXTRACTION_REASON_LABELS = {
+  access_denied: 'The extraction service denied access.',
+  demo_mode: 'Automatic extraction is disabled in demo mode.',
+  invalid_request: 'The extraction request was invalid.',
+  malformed_response: 'The extraction service returned an unreadable response.',
+  not_configured: 'The extraction service is not configured.',
+  oversized_input: 'The source was too large to process.',
+  provider_unavailable: 'The extraction service was unavailable or rejected its credentials.',
+  rate_limited: 'The extraction request was rate limited.',
+  remote_source_unavailable: 'The securely uploaded source was unavailable.',
+  source_unavailable: 'The source could not be retrieved for extraction.',
+  throttled: 'The extraction service temporarily throttled the request.',
+  timeout: 'The extraction request timed out.',
+  unsupported_input: 'The source format could not be processed.',
 };
 
 function emptyFields(viewer, type) {
   return {
     title: '',
-    org: viewer.role?.org || '',
+    org: type === 'event' ? '' : (viewer.role?.org || ''),
     subtype: type === 'event' ? 'Workshop' : 'Internship',
     paid: false,
-    compensationType: 'Not specified',
-    classifications: ['All classifications'],
+    compensationType: '',
+    classifications: [],
     workMode: '',
     description: '',
     eligibility: '',
@@ -65,10 +117,12 @@ function emptyFields(viewer, type) {
     endDate: '',
     time: '',
     deadline: '',
+    deadlineType: 'specific_date',
+    postedDate: '',
     location: '',
     link: '',
-    contactName: viewer.role?.full_name || '',
-    contactEmail: viewer.user?.email || '',
+    contactName: '',
+    contactEmail: '',
     majors: ['All majors'],
     source: viewer.role?.org || 'C.O.D.E.',
     announcementCategory: 'General',
@@ -125,12 +179,13 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
   const [step, setStep] = useState(initialContentType ? 2 : 1);
   const [contentType, setContentType] = useState(initialContentType);
   const [relationship, setRelationship] = useState('');
-  const [referral, setReferral] = useState({ name: '', title: '', organization: '', email: '', mayDisplay: false });
+  const [referral, setReferral] = useState({ name: '', title: '', organization: '', email: '', mayDisplay: false, relationship: '', graduationYear: '', organizerRole: '' });
+  const [organizationChoice, setOrganizationChoice] = useState('');
   const [artifacts, setArtifacts] = useState([]);
   const [nextSourceType, setNextSourceType] = useState('screenshot');
   const [pastedText, setPastedText] = useState('');
   const [parseResult, setParseResult] = useState(null);
-  const [fields, setFields] = useState(() => emptyFields(viewer, 'opportunity'));
+  const [fields, setFields] = useState(() => emptyFields(viewer, initialContentType || 'opportunity'));
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -140,13 +195,67 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
   const [feedbackStatus, setFeedbackStatus] = useState('');
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [contactConfirmed, setContactConfirmed] = useState(false);
+  const [useSubmitterAsContact, setUseSubmitterAsContact] = useState(false);
+  const [noPublicContact, setNoPublicContact] = useState(false);
+  const [acknowledgmentAccepted, setAcknowledgmentAccepted] = useState(false);
+  const [failedIntake, setFailedIntake] = useState(null);
+  const [preparedIntake, setPreparedIntake] = useState(null);
 
   const combinedBytes = useMemo(() => artifacts.reduce((sum, artifact) => sum + artifact.file.size, 0), [artifacts]);
+  const canViewTechnical = viewer.role?.role === 'super_admin';
+  const hasExtractedDetails = useMemo(() => {
+    if (!parseResult) return false;
+    const extractedFields = Object.values(parseResult.fields || {}).some((value) => String(value || '').trim());
+    const extractedTags = Object.values(parseResult.tags || {}).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value));
+    return extractedFields || extractedTags;
+  }, [parseResult]);
+  const missingRequired = useMemo(() => {
+    const required = contentType === 'event'
+      ? [['title', fields.title], ['hosting organization', fields.org], ['event date', fields.date], ['description', fields.description]]
+      : contentType === 'opportunity'
+        ? [['title', fields.title], ['organization', fields.org], ...((fields.deadlineType || 'specific_date') === 'specific_date' ? [['deadline', fields.deadline]] : []), ['description', fields.description], ['application link', fields.link], ['compensation', fields.compensationType]]
+        : [['title', fields.title], ['announcement', fields.body]];
+    return required.filter(([, value]) => !String(value || '').trim()).map(([label]) => label);
+  }, [contentType, fields]);
+  const extractionState = useMemo(() => {
+    if (!parseResult) return null;
+    if (!hasExtractedDetails) return 'failure';
+    return missingRequired.length ? 'partial' : 'success';
+  }, [hasExtractedDetails, missingRequired.length, parseResult]);
+  const extractionNotice = useMemo(() => {
+    if (extractionState === 'failure') return 'We couldn’t read enough information from this source. Please enter the details below.';
+    if (extractionState === 'partial') return `We filled in what we could from your source. Please check and add: ${missingRequired.join(', ')}.`;
+    if (extractionState === 'success') return 'We filled in details from your source. Review them below before submitting.';
+    return '';
+  }, [extractionState, missingRequired]);
+  const relationshipComplete = useMemo(() => {
+    if (!relationship) return false;
+    if (['alumni', 'organizer_host', 'general_contributor'].includes(relationship)) return true;
+    if (relationship === 'other') return Boolean(referral.relationship.trim());
+    return Boolean(referral.organization.trim() && referral.title.trim());
+  }, [relationship, referral]);
+  const peopleComplete = relationshipComplete
+    && (contentType === 'announcement' || Boolean(fields.org.trim()));
 
   function chooseType(type) {
+    artifacts.forEach((artifact) => {
+      if (artifact.previewUrl) URL.revokeObjectURL(artifact.previewUrl);
+    });
     setContentType(type);
     setFields(emptyFields(viewer, type));
+    setArtifacts([]);
+    setPastedText('');
     setParseResult(null);
+    setPreparedIntake(null);
+    setProgress(null);
+    setError('');
+    setRelationship('');
+    setReferral({ name: '', title: '', organization: '', email: '', mayDisplay: false, relationship: '', graduationYear: '', organizerRole: '' });
+    setOrganizationChoice('');
+    setContactConfirmed(false);
+    setUseSubmitterAsContact(false);
+    setNoPublicContact(false);
+    setAcknowledgmentAccepted(false);
     setStep(2);
   }
 
@@ -154,8 +263,47 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
     setFields((current) => ({ ...current, [name]: value }));
   }
 
+  function updateOpportunityType(value) {
+    setFields((current) => ({
+      ...current,
+      subtype: value,
+      classifications: value === 'Full-Time' && (current.subtype !== 'Full-Time' || current.classifications.includes('All classifications'))
+        ? [...FULL_TIME_DEFAULT_CLASSIFICATIONS]
+        : current.classifications,
+    }));
+  }
+
+  function updateDeadlineType(value) {
+    setFields((current) => ({ ...current, deadlineType: value, deadline: value === 'specific_date' ? current.deadline : '' }));
+  }
+
   function updateReferral(name, value) {
     setReferral((current) => ({ ...current, [name]: value }));
+  }
+
+  function toggleSubmitterContact(checked) {
+    setUseSubmitterAsContact(checked);
+    if (checked) setNoPublicContact(false);
+    if (checked) {
+      setFields((current) => ({ ...current, contactName: viewer.role?.full_name || '', contactEmail: viewer.user?.email || '' }));
+      setContactConfirmed(Boolean(viewer.user?.email));
+      return;
+    }
+    setFields((current) => ({
+      ...current,
+      contactName: current.contactName === (viewer.role?.full_name || '') ? '' : current.contactName,
+      contactEmail: current.contactEmail === (viewer.user?.email || '') ? '' : current.contactEmail,
+    }));
+    setContactConfirmed(false);
+  }
+
+  function toggleNoPublicContact(checked) {
+    setNoPublicContact(checked);
+    if (checked) {
+      setUseSubmitterAsContact(false);
+      setFields((current) => ({ ...current, contactName: '', contactEmail: '' }));
+      setContactConfirmed(false);
+    }
   }
 
   function toggleMajor(major) {
@@ -184,6 +332,24 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
     });
   }
 
+  function invalidatePreparedIntake({ resetExtractedFields = false } = {}) {
+    if (preparedIntake?.intakeSessionId && !preparedIntake.demo) {
+      void abandonIntakeAction(preparedIntake.intakeSessionId);
+    }
+    setPreparedIntake(null);
+    setParseResult(null);
+    setProgress(null);
+    setFailedIntake(null);
+    setFeedbackStatus('');
+    if (resetExtractedFields) {
+      setFields(emptyFields(viewer, contentType || 'opportunity'));
+      setOrganizationChoice('');
+      setContactConfirmed(false);
+      setUseSubmitterAsContact(false);
+      setAcknowledgmentAccepted(false);
+    }
+  }
+
   async function addFiles(event) {
     const selected = [...(event.target.files || [])];
     setError('');
@@ -199,9 +365,11 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
         sourceType: file.type === 'application/pdf' ? 'program_pdf' : nextSourceType,
         name: file.name,
         file,
+        previewUrl: URL.createObjectURL(file),
       }));
       const total = combinedBytes + incoming.reduce((sum, item) => sum + item.file.size, 0);
       if (total > 25 * 1024 * 1024) throw new Error('The combined source files exceed 25 MB. Remove a file or upload smaller copies.');
+      invalidatePreparedIntake({ resetExtractedFields: true });
       setArtifacts((current) => [...current, ...incoming]);
     } catch (reason) {
       setError(reason.message);
@@ -211,57 +379,140 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
   }
 
   function removeArtifact(id) {
-    setArtifacts((current) => current.filter((artifact) => artifact.id !== id));
+    invalidatePreparedIntake({ resetExtractedFields: true });
+    setError('');
+    setArtifacts((current) => {
+      const removed = current.find((artifact) => artifact.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((artifact) => artifact.id !== id);
+    });
+  }
+
+  function sourceFingerprint() {
+    return JSON.stringify({
+      files: artifacts.map((artifact) => [artifact.id, artifact.file.name, artifact.file.size, artifact.file.type]),
+      pastedText,
+    });
+  }
+
+  async function createAndUploadIntake({ provisional = false } = {}) {
+    const intake = await beginIntakeAction({
+      contentType,
+      provisional,
+      relationshipToSource: provisional ? 'other' : RELATIONSHIP_STORAGE[relationship],
+      relationshipDetails: provisional ? {} : {
+        category: relationship,
+        roleOrPosition: referral.title,
+        affiliation: referral.organization,
+        relationshipToSubmission: referral.relationship,
+        graduationYear: referral.graduationYear || null,
+        organizerRole: referral.organizerRole || null,
+      },
+      referral: provisional ? {} : referral,
+      pastedText,
+      artifacts: artifacts.map((artifact) => ({
+        clientId: artifact.id,
+        sourceType: artifact.sourceType,
+        name: artifact.file.name,
+        mimeType: artifact.file.type,
+        byteSize: artifact.file.size,
+      })),
+    });
+    if (!intake.ok) throw new Error(intake.error);
+
+    if (!intake.demo && intake.uploads.length) {
+      const supabase = createClient();
+      for (const upload of intake.uploads) {
+        const artifact = artifacts.find((item) => item.id === upload.clientId);
+        const { error: uploadError } = await supabase.storage
+          .from('intake-sources')
+          .uploadToSignedUrl(upload.path, upload.token, artifact.file, { contentType: artifact.file.type });
+        if (uploadError) {
+          await abandonIntakeAction(intake.intakeSessionId);
+          throw new Error(`${artifact.name} could not be uploaded securely. Please try again.`);
+        }
+      }
+    }
+
+    return {
+      intakeSessionId: intake.intakeSessionId,
+      sourceIds: Object.fromEntries((intake.sources || []).map((source) => [source.clientId, source.artifactId])),
+      fingerprint: sourceFingerprint(),
+      demo: Boolean(intake.demo),
+    };
   }
 
   async function extract() {
     if (!artifacts.length && !pastedText.trim()) {
       setError('');
       setParseResult(null);
-      setStep(4);
+      setStep(3);
       return;
     }
     setError('');
     setProgress({ source: 'Preparing sources', progress: 0 });
     try {
-      const result = await parseMultipleSources({
+      if (preparedIntake?.intakeSessionId && !preparedIntake.demo) {
+        await abandonIntakeAction(preparedIntake.intakeSessionId);
+      }
+      let draft = null;
+      try {
+        draft = await createAndUploadIntake({ provisional: true });
+        setPreparedIntake(draft);
+      } catch {
+        setPreparedIntake(null);
+      }
+      const extraction = await extractSubmission({
         contentType,
         artifacts,
         pastedText,
+        intakeSessionId: draft?.intakeSessionId || null,
         onProgress: setProgress,
       });
+      const parsedResult = toSubmissionParserResult(extraction);
+      const result = canViewTechnical ? parsedResult : { ...parsedResult, technical: {} };
       setParseResult(result);
+      if (result.fields.organization) setOrganizationChoice(APPROVED_ORGANIZATIONS.includes(result.fields.organization) ? result.fields.organization : 'other');
+      const extractedClassifications = normalizeOpportunityClassifications(result.tags.classifications);
       const extractedEligibility = result.fields.eligibility
         || result.tags.qualifications.join('; ')
-        || result.tags.classifications.join(', ');
+        || extractedClassifications.join(', ');
+      const extractedSubtype = result.tags.categories[0] && (contentType === 'event' ? EVENT_TYPES : OPPORTUNITY_TYPES).includes(result.tags.categories[0])
+        ? result.tags.categories[0]
+        : null;
       setFields((current) => ({
         ...current,
         title: result.fields.title || current.title,
         org: result.fields.organization || current.org,
         description: result.fields.description || current.description,
+        body: contentType === 'announcement' ? (result.fields.description || current.body) : current.body,
         eligibility: extractedEligibility || current.eligibility,
         date: result.fields.date || current.date,
         time: result.fields.time || current.time,
         deadline: result.fields.deadline || current.deadline,
+        postedDate: result.fields.postedDate || current.postedDate,
+        deadlineType: contentType === 'opportunity'
+          ? (result.fields.deadlineType || (result.fields.deadline ? 'specific_date' : current.deadlineType))
+          : current.deadlineType,
         location: result.fields.location || current.location,
         link: result.fields.link || current.link,
-        paid: ['Paid', 'Funded'].includes(result.tags.compensation) || current.paid,
-        compensationType: result.tags.compensation || current.compensationType,
-        classifications: result.tags.classifications.length ? result.tags.classifications : current.classifications,
+        paid: result.tags.compensation === 'Paid' || current.paid,
+        compensationType: ['Paid', 'Unpaid'].includes(result.tags.compensation) ? result.tags.compensation : current.compensationType,
+        classifications: extractedClassifications.length
+          ? extractedClassifications
+          : extractedSubtype === 'Full-Time' ? [...FULL_TIME_DEFAULT_CLASSIFICATIONS] : current.classifications,
         workMode: result.tags.workModes[0] || current.workMode,
-        subtype: result.tags.categories[0] && (contentType === 'event' ? EVENT_TYPES : OPPORTUNITY_TYPES).includes(result.tags.categories[0])
-          ? result.tags.categories[0]
-          : current.subtype,
+        subtype: extractedSubtype || current.subtype,
         majors: result.tags.majors.length ? result.tags.majors : current.majors,
-        contactName: relationship === 'original_contact' && result.fields.contactName ? result.fields.contactName : current.contactName,
-        contactEmail: relationship === 'original_contact' && result.fields.contactEmail ? result.fields.contactEmail : current.contactEmail,
+        contactName: result.fields.contactName || current.contactName,
+        contactEmail: result.fields.contactEmail || current.contactEmail,
         presenterName: result.fields.presenterName || current.presenterName,
         presenterAffiliation: result.fields.presenterAffiliation || current.presenterAffiliation,
       }));
-      setStep(4);
+      setStep(3);
     } catch (reason) {
       setError(reason.message || 'The sources could not be processed. You can continue manually.');
-      setStep(4);
+      setStep(3);
     } finally {
       setProgress(null);
     }
@@ -292,65 +543,62 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
           presenter_name: fields.presenterName || null,
           presenter_affiliation: fields.presenterAffiliation || null,
         }
-      : { ...common, eligibility: fields.eligibility || null, paid: fields.paid, compensation_type: fields.compensationType, classifications: fields.classifications, work_mode: fields.workMode || null, deadline: fields.deadline, link: fields.link };
+      : { ...common, eligibility: fields.eligibility || null, paid: fields.compensationType === 'Paid', compensation_type: fields.compensationType, classifications: fields.classifications, work_mode: fields.workMode || null, deadline_type: fields.deadlineType, deadline: fields.deadlineType === 'specific_date' ? fields.deadline : null, posted_date: fields.postedDate || null, link: fields.link };
   }
 
   async function submit(event) {
     event.preventDefault();
+    if (contentType === 'event' && !acknowledgmentAccepted) {
+      setError('Confirm the submission acknowledgment before submitting this event.');
+      return;
+    }
     if (contentType !== 'announcement' && fields.contactEmail && !contactConfirmed) {
       setError('Confirm the public contact information before submitting.');
       return;
     }
     setSubmitting(true);
     setError('');
+    setFailedIntake(null);
     try {
-      const intake = await beginIntakeAction({
-        contentType,
-        relationshipToSource: relationship,
-        referral,
-        pastedText,
-        artifacts: artifacts.map((artifact) => ({
-          clientId: artifact.id,
-          sourceType: artifact.sourceType,
-          name: artifact.file.name,
-          mimeType: artifact.file.type,
-          byteSize: artifact.file.size,
-        })),
-      });
-      if (!intake.ok) throw new Error(intake.error);
-      const sourceIds = Object.fromEntries((intake.sources || []).map(source => [source.clientId, source.artifactId]));
-
-      if (!intake.demo && intake.uploads.length) {
-        const supabase = createClient();
-        for (const upload of intake.uploads) {
-          const artifact = artifacts.find((item) => item.id === upload.clientId);
-          const { error: uploadError } = await supabase.storage
-            .from('intake-sources')
-            .uploadToSignedUrl(upload.path, upload.token, artifact.file, {
-              contentType: artifact.file.type,
-            });
-          if (uploadError) {
-            await abandonIntakeAction(intake.intakeSessionId);
-            throw new Error(`${artifact.name} could not be uploaded securely. Please try again.`);
-          }
-        }
+      let intake = preparedIntake;
+      if (!intake || intake.fingerprint !== sourceFingerprint()) {
+        if (intake?.intakeSessionId && !intake.demo) await abandonIntakeAction(intake.intakeSessionId);
+        intake = await createAndUploadIntake();
+        setPreparedIntake(intake);
       }
+      const sourceIds = intake.sourceIds || {};
 
       const finalized = await finalizeIntakeAction({
         intakeSessionId: intake.intakeSessionId,
         contentType,
+        relationshipToSource: RELATIONSHIP_STORAGE[relationship],
+        relationshipDetails: {
+          category: relationship,
+          roleOrPosition: referral.title,
+          affiliation: referral.organization,
+          relationshipToSubmission: referral.relationship,
+          graduationYear: referral.graduationYear || null,
+          organizerRole: referral.organizerRole || null,
+        },
+        referral,
         payload: buildPayload(null),
-        suggestions: Object.fromEntries(Object.entries(parseResult?.provenance || {}).map(([field, suggestion]) => [field, { ...suggestion, sourceArtifactId: sourceIds[suggestion.sourceArtifactId] || null }])),
+        suggestions: Object.fromEntries(Object.entries(parseResult?.provenance || {}).map(([field, suggestion]) => [field, { ...suggestion, sourceArtifactId: sourceIds[suggestion.sourceArtifactId] || suggestion.sourceArtifactId || null }])),
         sourceResults: (parseResult?.source?.processed || []).map(result => ({
-          sourceArtifactId: sourceIds[result.artifactId] || null,
+          sourceArtifactId: sourceIds[result.artifactId] || result.artifactId || null,
           status: result.status === 'failed' ? 'failed' : (parseResult?.warnings?.some(warning => warning.artifactId === result.artifactId) ? 'needs_review' : 'processed'),
           pageCount: result.pageCount,
           warnings: (parseResult?.warnings || []).filter(warning => warning.artifactId === result.artifactId).map(warning => warning.message),
         })),
         confirmedValues: fields,
+        acknowledgmentAccepted,
       });
-      if (!finalized.ok) throw new Error(finalized.error);
+      if (!finalized.ok) {
+        if (finalized.retained) setFailedIntake({ intakeSessionId: intake.intakeSessionId });
+        throw new Error(finalized.error);
+      }
       setSubmittedIntakeId(intake.intakeSessionId);
+      setPreparedIntake(null);
+      setStep(6);
       setSubmitted(true);
     } catch (reason) {
       setError(reason.message || 'The submission could not be completed.');
@@ -372,22 +620,23 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
     }
     return (
       <div className="max-w-2xl mx-auto mt-16 bg-white border border-line rounded-2xl p-8">
-        <div className="font-display text-xl text-purple-900">Submitted for human review</div>
+        <div className="font-display text-xl text-purple-900">Submitted for review</div>
         <p className="text-sm text-slate mt-2">
           Panther Hub received “{fields.title}.” Nothing is published until an authorized reviewer approves it.
           {isDemoMode && ' This was a demo submission and was not saved.'}
         </p>
-        <a href="/panther-submit" className="gold-button inline-flex mt-5">Submit another</a>
+        <p className="text-sm text-slate mt-2">You can return to check its status. A reviewer may ask you to correct missing or unclear information.</p>
+        <div className="submission-success-actions"><a href="/panther-submit#submission-status" className="outline-button">View submission status</a><a href="/panther-submit" className="gold-button">Submit another</a></div>
         {feedbackEnabled && <form onSubmit={saveFeedback} className="parser-feedback mt-6 border-t border-line pt-5">
-          <h2 className="font-display text-lg text-purple-900">Optional: how accurate were the suggestions?</h2>
-          <p className="text-xs text-slate mt-1">This helps improve extraction. It does not change your completed submission, and no document text, corrected values, email, device, or browsing identifier is collected.</p>
+          <h2 className="font-display text-lg text-purple-900">Optional: parser quality feedback</h2>
+          <p className="text-xs text-slate mt-1">Super Admin feedback helps us improve extraction. Note what the parser handled well, what it missed, or what required manual correction. This does not change your completed submission.</p>
           <fieldset className="mt-4"><legend className="text-sm font-medium">Overall result</legend><div className="flex flex-wrap gap-2 mt-2">
             {FEEDBACK_RATINGS.map(([value, label]) => <label key={value} className="chip"><input type="radio" name="parser-rating" value={value} checked={feedback.rating === value} onChange={() => setFeedback((current) => ({ ...current, rating: value }))} /> {label}</label>)}
           </div></fieldset>
           <fieldset className="mt-4"><legend className="text-sm font-medium">What needed attention? <span className="text-slate font-normal">(choose any)</span></legend><div className="flex flex-wrap gap-2 mt-2">
             {FEEDBACK_ISSUES.map(([value, label]) => <label key={value} className="chip"><input type="checkbox" checked={feedback.issueFields.includes(value)} onChange={() => toggleFeedbackIssue(value)} /> {label}</label>)}
           </div></fieldset>
-          <label className="block mt-4"><span className="text-sm font-medium">Short note <span className="text-slate font-normal">(optional, 500 characters)</span></span><textarea className="input mt-2" rows={3} maxLength={500} value={feedback.note} onChange={(event) => setFeedback((current) => ({ ...current, note: event.target.value }))} placeholder="Describe the extraction issue without pasting private source text." /></label>
+          <label className="block mt-4"><span className="text-sm font-medium">What it handled well / where it struggled <span className="text-slate font-normal">(optional, 500 characters)</span></span><textarea className="input mt-2" rows={3} maxLength={500} value={feedback.note} onChange={(event) => setFeedback((current) => ({ ...current, note: event.target.value }))} placeholder="Describe strengths or gaps without pasting private source text." /></label>
           <button className="gold-button mt-4" type="submit" disabled={!feedback.rating || feedbackSaving}>{feedbackSaving ? 'Saving…' : 'Send optional feedback'}</button>
           {feedbackStatus && <p className="text-xs text-slate mt-3" role="status" aria-live="polite">{feedbackStatus}</p>}
         </form>}
@@ -398,14 +647,14 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
   return (
     <div className="max-w-4xl mx-auto pb-20">
       <header className="mt-9 mb-8">
-        <div className="font-mono text-xs uppercase tracking-wider text-gold-600">Panther Hub contributor intake</div>
+        <div className="font-mono text-xs uppercase tracking-wider text-gold-600">Contributor submission</div>
         <h1 className="font-display text-3xl text-purple-900 mt-1">Share something useful with students</h1>
         <p className="text-sm text-slate mt-2">Add what you already have. Panther Hub will suggest details and ask only for what is missing.</p>
       </header>
 
-      <div className="grid grid-cols-4 gap-2 mb-8">
-        {['Type', 'Source', 'Attach', 'Confirm'].map((label, index) => (
-          <div key={label} className={`rounded-lg px-3 py-2 text-xs font-mono ${step >= index + 1 ? 'bg-purple-900 text-white' : 'bg-white border border-line text-slate'}`}>
+      <div className="submission-progress mb-8" aria-label="Submission progress">
+        {['Type', 'Source', 'Details', 'People', 'Review', 'Submit'].map((label, index) => (
+          <div key={label} aria-current={step === index + 1 ? 'step' : undefined} className={`rounded-lg px-3 py-2 text-xs font-mono ${step >= index + 1 ? 'bg-purple-900 text-white' : 'bg-white border border-line text-slate'}`}>
             {index + 1}. {label}
           </div>
         ))}
@@ -424,34 +673,49 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
         </Panel>
       )}
 
-      {step === 2 && (
-        <Panel title="How did this reach Panther Hub?">
-          <div className="grid md:grid-cols-2 gap-3">
-            {RELATIONSHIPS.map(([value, label]) => (
-              <label key={value} className={`border rounded-lg p-3 text-sm cursor-pointer ${relationship === value ? 'border-purple-900 bg-purple-100' : 'border-line bg-white'}`}>
-                <input type="radio" name="relationship" className="mr-2" checked={relationship === value} onChange={() => setRelationship(value)} />
-                {label}
-              </label>
-            ))}
-          </div>
-          {relationship && relationship !== 'original_contact' && (
-            <div className="grid md:grid-cols-2 gap-4 mt-5 border-t border-line pt-5">
-              <Input label="Who shared or referred it?" value={referral.name} onChange={(value) => updateReferral('name', value)} />
-              <Input label="Title or relationship" value={referral.title} onChange={(value) => updateReferral('title', value)} />
-              <Input label="Department or organization" value={referral.organization} onChange={(value) => updateReferral('organization', value)} />
-              <Input label="Referral email" type="email" value={referral.email} onChange={(value) => updateReferral('email', value)} />
-              <label className="md:col-span-2 text-xs text-slate flex gap-2 items-start">
-                <input type="checkbox" checked={referral.mayDisplay} onChange={(event) => updateReferral('mayDisplay', event.target.checked)} />
-                This referral contact may be displayed publicly if a reviewer confirms it is appropriate.
-              </label>
+      {step === 4 && (
+        <Panel title="People connected to this submission">
+          <section className="submission-identity-section" aria-labelledby="submitted-by-title">
+            <div className="eyebrow" id="submitted-by-title">Submitted by</div>
+            <p className="submission-identity-help">This is you—the person sending the information to the Hub. The organizer may be someone else.</p>
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
+              <Input label="Your name" value={viewer.role?.full_name || 'Name not added yet'} readOnly />
+              <Input label="Your email" type="email" value={viewer.user?.email || ''} readOnly />
             </div>
-          )}
-          <Navigation back={() => setStep(1)} next={() => relationship && setStep(3)} nextDisabled={!relationship} />
+            {!viewer.role?.full_name && <WorkspaceIdentityForm email={viewer.user?.email} />}
+            <label className="block mt-4">
+              <span className="text-sm font-medium block mb-1.5">How are you connected? <span className="text-coral">*</span></span>
+              <select className="input" required value={relationship} onChange={(event) => { setRelationship(event.target.value); setReferral((current) => ({ ...current, title: '', organization: '', relationship: '', graduationYear: '', organizerRole: '' })); }}>
+                <option value="">Choose one</option>
+                {RELATIONSHIPS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+              </select>
+            </label>
+            {relationship && <RelationshipFields relationship={relationship} referral={referral} updateReferral={updateReferral} />}
+          </section>
+
+          {contentType !== 'announcement' && <>
+            <section className="submission-identity-section" aria-labelledby="organizer-title">
+              <div className="eyebrow" id="organizer-title">{contentType === 'event' ? 'Event host' : 'Employer / offering organization'}</div>
+              <p className="submission-identity-help">{contentType === 'event' ? 'Who is hosting this event?' : 'Who is offering this opportunity?'} This is separate from the person submitting it.</p>
+              <p className="mt-3"><strong>{fields.org}</strong></p>
+            </section>
+            <section className="submission-identity-section" aria-labelledby="public-contact-title">
+              <div className="eyebrow" id="public-contact-title">{contentType === 'event' ? 'Event contact' : 'Opportunity contact'}</div>
+              <p className="submission-identity-help">Who can students contact about this {contentType}?</p>
+              <label className="flex items-start gap-2 mt-4 text-sm"><input type="checkbox" checked={useSubmitterAsContact} onChange={(event) => toggleSubmitterContact(event.target.checked)} /><span>Use me as the public contact</span></label>
+              {contentType === 'opportunity' && <label className="flex items-start gap-2 mt-3 text-sm"><input type="checkbox" checked={noPublicContact} onChange={(event) => toggleNoPublicContact(event.target.checked)} /><span>No public opportunity contact available</span></label>}
+              {!useSubmitterAsContact && !noPublicContact && <div className="grid md:grid-cols-2 gap-4 mt-4">
+                <Input label="Contact name (optional)" value={fields.contactName} onChange={(value) => updateField('contactName', value)} />
+                <Input label="Contact email (optional)" type="email" value={fields.contactEmail} onChange={(value) => { updateField('contactEmail', value); setContactConfirmed(false); }} />
+              </div>}
+            </section>
+          </>}
+          <Navigation back={() => setStep(3)} next={() => setStep(5)} nextDisabled={!peopleComplete} />
         </Panel>
       )}
 
-      {step === 3 && (
-        <Panel title="Add your sources">
+      {step === 2 && (
+        <Panel title="Add your source">
           <p className="text-sm text-slate mb-5">
             Upload a PDF or screenshot, or paste the details directly. Accepted files: PDF, PNG, JPG/JPEG.
           </p>
@@ -461,77 +725,41 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
             </select>
             <label className="bg-purple-900 text-white rounded-lg px-5 py-3 text-sm cursor-pointer text-center">
               Add source file
-              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" className="hidden" onChange={addFiles} />
+              <input id="submission-source-file" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" className="hidden" onChange={addFiles} />
             </label>
           </div>
 
           <div className="mt-4 flex flex-col gap-2">
             {artifacts.map((artifact) => (
-              <div key={artifact.id} className="flex items-center justify-between border border-line rounded-lg px-4 py-3 bg-paper">
+              <div key={artifact.id} className="flex flex-wrap items-center justify-between gap-3 border border-line rounded-lg px-4 py-3 bg-paper">
                 <div>
                   <div className="text-sm font-medium">{artifact.name}</div>
-                  <div className="text-xs text-slate">{SOURCE_TYPES.find(([value]) => value === artifact.sourceType)?.[1]} · {mb(artifact.file.size)}</div>
+                  <div className="text-xs text-slate">Ready to process · {mb(artifact.file.size)}</div>
                 </div>
-                <button type="button" className="text-xs text-coral" onClick={() => removeArtifact(artifact.id)}>Remove</button>
+                <div className="flex flex-wrap gap-3"><a className="text-xs text-purple-700" href={artifact.previewUrl} target="_blank" rel="noreferrer">View original</a><button type="button" className="text-xs text-coral" aria-label={`Remove ${artifact.name}`} onClick={() => removeArtifact(artifact.id)}>Remove source</button></div>
               </div>
             ))}
           </div>
 
           <label className="block mt-5">
             <span className="text-sm font-medium block mb-1.5">Paste email or posting text</span>
-            <textarea value={pastedText} onChange={(event) => setPastedText(event.target.value)} rows={6} className="input" placeholder="Paste the relevant message or posting text. Unrelated email history is not needed." />
+            <textarea value={pastedText} onChange={(event) => { invalidatePreparedIntake({ resetExtractedFields: true }); setPastedText(event.target.value); }} rows={6} className="input" placeholder="Paste the relevant message or posting text. Unrelated email history is not needed." />
           </label>
 
           {progress && <div className="mt-4 text-xs text-purple-700">Processing {progress.source} — {Math.round((progress.progress || 0) * 100)}%</div>}
-          <Navigation back={() => setStep(2)} next={extract} nextLabel={artifacts.length || pastedText.trim() ? 'Extract suggestions' : 'Continue manually'} />
+          <Navigation back={() => setStep(1)} next={extract} nextLabel={artifacts.length || pastedText.trim() ? 'Review what the Hub found' : 'Continue manually'} />
         </Panel>
       )}
 
-      {step === 4 && (
-        <form onSubmit={submit}>
-          <Panel title="Confirm the student-facing details">
-            {(artifacts.length > 0 || parseResult?.source?.processed?.length > 0) && <Notice>OCR is currently being improved. If you use an uploaded screenshot or PDF, please review and confirm the information below before submitting.</Notice>}
-            {parseResult?.warnings?.map((warning) => <Notice key={`${warning.code}-${warning.artifactId || ''}`}>{warning.message}</Notice>)}
-            {parseResult?.conflicts?.map((conflict) => <Notice key={conflict.field}>{conflict.message}</Notice>)}
+      {step === 3 && (
+        <div>
+          <Panel title="What the Hub found">
+            {extractionNotice && <Notice>{extractionNotice}</Notice>}
+            {parseResult?.conflicts?.length > 0 && <p className="text-sm text-slate mb-4">Some sources contained different information. Choose the value that should be reviewed below.</p>}
 
-            {parseResult?.source?.processed?.length > 0 && (
-              <div className="border border-line rounded-xl p-4 mb-5 bg-paper">
-                <div className="text-xs font-mono uppercase text-slate mb-2">Source extraction results</div>
-                {parseResult.source.processed.map((source) => (
-                  <div key={source.artifactId} className="text-xs text-slate mt-1">
-                    <strong className="text-purple-900">{source.sourceName}:</strong>{' '}
-                    {source.status === 'processed'
-                      ? `${source.rawText ? 'text detected' : 'no text detected'}${Number.isFinite(source.confidence) ? ` · OCR confidence ${Math.round(source.confidence)}%` : ''}`
-                      : source.status === 'needs_review' ? 'manual review needed' : 'automatic extraction failed'}
-                  </div>
-                ))}
-              </div>
-            )}
-            {parseResult?.uncertainFields?.length > 0 && (
-              <div className="border border-gold-400 rounded-xl p-4 mb-5 bg-gold-100">
-                <div className="text-xs font-mono uppercase text-gold-600 mb-2">Fields to double-check</div>
-                <p className="text-xs text-slate mb-2">These values were inferred from layout, lower-confidence OCR, or conflicting sources. Correct them directly in the form below.</p>
-                <ul className="text-xs text-ink space-y-1">
-                  {parseResult.uncertainFields.map((item) => (
-                    <li key={item.field}><strong>{FIELD_LABELS[item.field] || item.field}:</strong> {item.reason}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {parseResult?.tags && (
-              <div className="border border-line rounded-xl p-4 mb-5 bg-paper">
-                <div className="text-xs font-mono uppercase text-slate mb-2">Suggested classifications — reviewer confirmation required</div>
-                <div className="flex flex-wrap gap-2">
-                  {[...parseResult.tags.categories, ...parseResult.tags.sectors, ...parseResult.tags.workModes, ...parseResult.tags.classifications, ...parseResult.tags.qualifications].map((tag) => (
-                    <span key={tag} className="text-xs bg-purple-100 text-purple-700 rounded-full px-3 py-1">{tag}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${contentType === 'event' ? '' : 'md:grid-cols-2'}`}>
               <Input label="Title" required value={fields.title} onChange={(value) => updateField('title', value)} />
-              <Input label={contentType === 'announcement' ? 'Source' : 'Organization, employer, or host'} required value={contentType === 'announcement' ? fields.source : fields.org} onChange={(value) => updateField(contentType === 'announcement' ? 'source' : 'org', value)} />
+              {contentType !== 'event' && <Input label={contentType === 'announcement' ? 'Source' : 'Organization, employer, or host'} required value={contentType === 'announcement' ? fields.source : fields.org} onChange={(value) => updateField(contentType === 'announcement' ? 'source' : 'org', value)} />}
             </div>
 
             {contentType === 'announcement' ? (
@@ -547,31 +775,59 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
                 <label className="block mt-4"><span className="text-sm font-medium block mb-1.5">Description</span><textarea required className="input" rows={6} value={fields.description} onChange={(event) => updateField('description', event.target.value)} /></label>
                 {contentType === 'opportunity' && <label className="block mt-4"><span className="text-sm font-medium block mb-1.5">Eligibility and requirements</span><textarea className="input" rows={4} value={fields.eligibility} onChange={(event) => updateField('eligibility', event.target.value)} placeholder="Who is eligible, required experience, GPA, work authorization, or other qualifications" /></label>}
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
-                  <label><span className="text-sm font-medium block mb-1.5">Category</span><select className="input" value={fields.subtype} onChange={(event) => updateField('subtype', event.target.value)}>{(contentType === 'event' ? EVENT_TYPES : OPPORTUNITY_TYPES).map((value) => <option key={value}>{value}</option>)}</select></label>
-                  <Input label={contentType === 'event' ? 'Event start date' : 'Application deadline'} type="date" required value={contentType === 'event' ? fields.date : fields.deadline} onChange={(value) => updateField(contentType === 'event' ? 'date' : 'deadline', value)} />
+                  <label><span className="text-sm font-medium block mb-1.5">Category</span><select className="input" value={fields.subtype} onChange={(event) => contentType === 'opportunity' ? updateOpportunityType(event.target.value) : updateField('subtype', event.target.value)}>{(contentType === 'event' ? EVENT_TYPES : OPPORTUNITY_TYPES).map((value) => <option key={value}>{value}</option>)}</select></label>
+                  {contentType === 'event' && <Input label="Event start date" type="date" required value={fields.date} onChange={(value) => updateField('date', value)} />}
+                  {contentType === 'opportunity' && <label><span className="text-sm font-medium block mb-1.5">Deadline</span><select className="input" value={fields.deadlineType} onChange={(event) => updateDeadlineType(event.target.value)}>{SUBMISSION_DEADLINE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
+                  {contentType === 'opportunity' && fields.deadlineType === 'specific_date' && <Input label="Application deadline" type="date" required value={fields.deadline} onChange={(value) => updateField('deadline', value)} />}
+                  {contentType === 'opportunity' && fields.deadlineType === 'rolling' && <Input label="Original posting date (optional)" type="date" value={fields.postedDate} onChange={(value) => updateField('postedDate', value)} />}
                   {contentType === 'event' && <Input label="Event end date (optional)" type="date" min={fields.date || undefined} value={fields.endDate} onChange={(value) => updateField('endDate', value)} />}
                   {contentType === 'event' && <Input label="Time" value={fields.time} onChange={(value) => updateField('time', value)} placeholder="4:00–5:15 PM" />}
                   <Input label={contentType === 'opportunity' && fields.workMode && fields.workMode !== 'Remote' ? 'Location (required)' : 'Location'} required={contentType === 'opportunity' && Boolean(fields.workMode) && fields.workMode !== 'Remote'} value={fields.location} onChange={(value) => updateField('location', value)} />
                   <Input label={contentType === 'event' ? 'Registration link' : 'Application link'} type="url" required={contentType === 'opportunity'} value={fields.link} onChange={(value) => updateField('link', value)} />
-                  <Input label="Public contact name" required value={fields.contactName} onChange={(value) => updateField('contactName', value)} />
-                  <Input label="Public contact email" type="email" required value={fields.contactEmail} onChange={(value) => { updateField('contactEmail', value); setContactConfirmed(false); }} />
                 </div>
-                {contentType === 'opportunity' && <div className="grid md:grid-cols-2 gap-4 mt-4"><label><span className="text-sm font-medium block mb-1.5">Work format</span><select className="input" value={fields.workMode} onChange={(event) => updateField('workMode', event.target.value)}><option value="">Not specified</option>{WORK_MODES.map((value) => <option key={value}>{value}</option>)}</select></label><label><span className="text-sm font-medium block mb-1.5">Compensation</span><select className="input" value={fields.compensationType} onChange={(event) => { updateField('compensationType', event.target.value); updateField('paid', ['Paid', 'Funded'].includes(event.target.value)); }}>{COMPENSATION_TYPES.map((value) => <option key={value}>{value}</option>)}</select></label></div>}
+                {contentType === 'event' && <section className="submission-identity-section mt-5" aria-labelledby="confirm-organizer-title">
+                  <div className="eyebrow" id="confirm-organizer-title">Event host</div>
+                  <div className="mt-4"><OrganizationSelect choice={organizationChoice} setChoice={setOrganizationChoice} value={fields.org} onChange={(value) => updateField('org', value)} /></div>
+                </section>}
+                {contentType === 'opportunity' && <div className="grid md:grid-cols-2 gap-4 mt-4"><label><span className="text-sm font-medium block mb-1.5">Work format</span><select className="input" value={fields.workMode} onChange={(event) => updateField('workMode', event.target.value)}><option value="">Not specified</option>{WORK_MODES.map((value) => <option key={value}>{value}</option>)}</select></label><label><span className="text-sm font-medium block mb-1.5">Compensation <span className="text-coral">*</span></span><select required className="input" value={fields.compensationType} onChange={(event) => { updateField('compensationType', event.target.value); updateField('paid', event.target.value === 'Paid'); }}><option value="" disabled>Select compensation</option>{COMPENSATION_TYPES.map((value) => <option key={value}>{value}</option>)}</select></label></div>}
                 <div className="mt-5"><div className="text-sm font-medium mb-2">Eligible majors</div><div className="flex flex-wrap gap-2">{MAJORS.map((major) => <button type="button" key={major} onClick={() => toggleMajor(major)} className={`text-xs rounded-full px-3 py-1.5 border ${fields.majors.includes(major) ? 'bg-purple-900 text-white border-purple-900' : 'border-line'}`}>{major}</button>)}</div></div>
                 {contentType === 'opportunity' && <div className="mt-5"><div className="text-sm font-medium mb-2">Eligible classifications</div><div className="flex flex-wrap gap-2">{CLASSIFICATIONS.map((classification) => <button type="button" key={classification} onClick={() => toggleClassification(classification)} className={'text-xs rounded-full px-3 py-1.5 border ' + (fields.classifications.includes(classification) ? 'bg-purple-900 text-white border-purple-900' : 'border-line')}>{classification}</button>)}</div></div>}
-                <label className="flex items-start gap-2 text-xs text-slate bg-purple-100 rounded-lg p-3 mt-5"><input type="checkbox" checked={contactConfirmed} onChange={(event) => setContactConfirmed(event.target.checked)} /><span>I confirm this is the appropriate contact to display publicly. The referral source remains separate unless a reviewer approves it for display.</span></label>
               </>
             )}
 
             <div className="flex justify-between items-center mt-7 pt-5 border-t border-line">
-              <button type="button" className="text-sm text-purple-700" onClick={() => setStep(3)}>Back to sources</button>
-              <button type="submit" disabled={submitting} className="bg-gold-400 text-purple-900 font-semibold rounded-lg px-6 py-3 disabled:opacity-50">{submitting ? 'Submitting…' : 'Submit for human review'}</button>
+              <button type="button" className="text-sm text-purple-700" onClick={() => setStep(2)}>Back to source</button>
+              <button type="button" disabled={missingRequired.length > 0} className="bg-purple-900 text-white rounded-lg px-5 py-2.5 text-sm disabled:opacity-40" onClick={() => setStep(4)}>Continue</button>
+            </div>
+          </Panel>
+        </div>
+      )}
+
+      {step === 5 && (
+        <form onSubmit={submit}>
+          <Panel title="Final review">
+            <p className="text-sm text-slate mb-5">Submitting sends this information to the C.O.D.E. team for review. It will not be visible to students until approved.</p>
+            <dl className="submission-final-summary">
+              <div><dt>You’re submitting</dt><dd>{fields.title || 'Title missing'}</dd></div>
+              {contentType !== 'announcement' && <div><dt>Hosted by</dt><dd>{fields.org || 'Organization missing'}</dd></div>}
+              <div><dt>{contentType === 'event' ? 'Date' : contentType === 'opportunity' ? 'Deadline' : 'Content type'}</dt><dd>{contentType === 'event' ? fields.date : contentType === 'opportunity' ? deadlineLabel(fields.deadlineType, fields.deadline) : 'Hub announcement'}</dd></div>
+              <div><dt>Submitted by</dt><dd>{viewer.role?.full_name || viewer.user?.email}</dd></div>
+            </dl>
+            {contentType === 'event' && <section className="submission-acknowledgment" aria-labelledby="submission-acknowledgment-title">
+              <div className="eyebrow" id="submission-acknowledgment-title">Before you submit</div>
+              <p>{SUBMISSION_ACKNOWLEDGMENT}</p>
+              <label><input type="checkbox" required checked={acknowledgmentAccepted} onChange={(event) => setAcknowledgmentAccepted(event.target.checked)} /><span>I confirm the information I submitted is accurate to the best of my knowledge.</span></label>
+            </section>}
+            {fields.contactEmail && <label className="flex items-start gap-2 text-xs text-slate bg-purple-100 rounded-lg p-3 mt-5"><input type="checkbox" checked={contactConfirmed} onChange={(event) => setContactConfirmed(event.target.checked)} /><span>I confirm this is the appropriate contact to display publicly. The submitter identity remains separate from the organizer.</span></label>}
+            <div className="submission-final-actions">
+              <button type="button" className="outline-button" onClick={() => setStep(3)}>Edit information</button>
+              <button type="submit" disabled={submitting || (contentType === 'event' && !acknowledgmentAccepted) || (Boolean(fields.contactEmail) && !contactConfirmed)} className="gold-button">{submitting ? 'Submitting…' : 'Submit for review'}</button>
             </div>
           </Panel>
         </form>
       )}
 
-      {error && <div role="alert" className="mt-4 bg-[#FBEDE5] text-coral rounded-lg p-4 text-sm">{error}</div>}
+      {error && <div role="alert" className={`submission-error${failedIntake ? ' submission-error-retained' : ''}`}><p>{failedIntake ? "We couldn't create the final submission. Your source information was retained safely, but no content was submitted for review." : error}</p>{failedIntake && <><small>A clean retry will create a new submission attempt. The previous failed attempt remains available to administrators for troubleshooting.</small><button type="button" className="outline-button" onClick={() => { setFailedIntake(null); setError(''); }}>Try again</button></>}</div>}
 
       <style jsx global>{`.input{width:100%;border:1px solid #E7E2EF;border-radius:8px;padding:10px 13px;font-size:13.5px;font-family:inherit}.input:focus{outline:2px solid #B8912B;outline-offset:1px}`}</style>
     </div>
@@ -582,8 +838,8 @@ function Panel({ title, children }) {
   return <section className="bg-white border border-line rounded-2xl p-6 md:p-8"><h2 className="font-display text-xl text-purple-900 mb-5">{title}</h2>{children}</section>;
 }
 
-function Input({ label, value, onChange, type = 'text', required, placeholder, min }) {
-  return <label className="block"><span className="text-sm font-medium block mb-1.5">{label}{required && <span className="text-coral"> *</span>}</span><input className="input" type={type} required={required} value={value} placeholder={placeholder} min={min} onChange={(event) => onChange(event.target.value)} /></label>;
+function Input({ label, value, onChange, type = 'text', required, placeholder, min, readOnly = false }) {
+  return <label className="block"><span className="text-sm font-medium block mb-1.5">{label}{required && <span className="text-coral"> *</span>}</span><input className="input" type={type} required={required} value={value} placeholder={placeholder} min={min} readOnly={readOnly} aria-readonly={readOnly || undefined} onChange={readOnly ? undefined : (event) => onChange(event.target.value)} /></label>;
 }
 
 function Navigation({ back, next, nextDisabled, nextLabel = 'Continue' }) {
@@ -592,4 +848,30 @@ function Navigation({ back, next, nextDisabled, nextLabel = 'Continue' }) {
 
 function Notice({ children }) {
   return <div className="bg-gold-100 text-ink border border-gold-400 rounded-lg p-3 text-sm mb-3">{children}</div>;
+}
+
+function OrganizationSelect({ choice, setChoice, value, onChange }) {
+  function changeChoice(nextChoice) {
+    setChoice(nextChoice);
+    onChange(nextChoice === 'other' ? '' : nextChoice);
+  }
+  return <div>
+    <label className="block"><span className="text-sm font-medium block mb-1.5">Hosting organization <span className="text-coral">*</span></span><select className="input" required value={choice} onChange={(event) => changeChoice(event.target.value)}><option value="">Choose an organization</option>{APPROVED_ORGANIZATIONS.map((organization) => <option key={organization} value={organization}>{organization}</option>)}<option value="other">Other / Not listed</option></select></label>
+    {choice === 'other' && <div className="mt-3"><Input label="Organization name" required value={value} onChange={onChange} placeholder="Enter the full official organization name" /></div>}
+  </div>;
+}
+
+function RelationshipFields({ relationship, referral, updateReferral }) {
+  if (relationship === 'student_organization') return <div className="grid md:grid-cols-2 gap-4 mt-4">
+    <label><span className="text-sm font-medium block mb-1.5">Registered student organization <span className="text-coral">*</span></span><select className="input" required value={referral.organization} onChange={(event) => updateReferral('organization', event.target.value)}><option value="">Choose an organization</option>{REGISTERED_EVENT_ORGANIZATIONS.map((organization) => <option key={organization.value} value={organization.label}>{organization.label}</option>)}</select></label>
+    <Input label="Your role" required value={referral.title} onChange={(value) => updateReferral('title', value)} placeholder="President, officer, member, adviser" />
+    <div className="md:col-span-2"><ReportIssueForm label="Report / request an organization addition" defaultIssueType="Organization addition request" /></div>
+  </div>;
+  if (relationship === 'faculty_staff' || relationship === 'department_college') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label={relationship === 'faculty_staff' ? 'Department / office' : 'Department / college'} required value={referral.organization} onChange={(value) => updateReferral('organization', value)} /><Input label="Position or role" required value={referral.title} onChange={(value) => updateReferral('title', value)} /></div>;
+  if (relationship === 'alumni') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label="Graduation year (optional)" value={referral.graduationYear} onChange={(value) => updateReferral('graduationYear', value)} /><Input label="Current organization / company (optional)" value={referral.organization} onChange={(value) => updateReferral('organization', value)} /></div>;
+  if (relationship === 'corporate_industry') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label="Company" required value={referral.organization} onChange={(value) => updateReferral('organization', value)} /><Input label="Position" required value={referral.title} onChange={(value) => updateReferral('title', value)} /></div>;
+  if (relationship === 'ambassador') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label="Organization" required value={referral.organization} onChange={(value) => updateReferral('organization', value)} placeholder="Amazon Web Services" /><Input label="Ambassador role" required value={referral.title} onChange={(value) => updateReferral('title', value)} placeholder="AWS Student Builder Ambassador" /></div>;
+  if (relationship === 'organizer_host') return <p className="submission-identity-help mt-4">The event host or opportunity organization is recorded separately below, so no duplicate organizer field is needed here.</p>;
+  if (relationship === 'general_contributor') return <div className="mt-4"><Input label="Optional context" value={referral.relationship} onChange={(value) => updateReferral('relationship', value)} placeholder="How you found or verified this information" /></div>;
+  return <div className="mt-4"><Input label="How are you connected?" required value={referral.relationship} onChange={(value) => updateReferral('relationship', value)} placeholder="Briefly describe your connection" /></div>;
 }

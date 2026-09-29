@@ -1,5 +1,5 @@
-import { canReview, getViewer } from '../../lib/auth';
 import WhoIsCodeExperience from '../../components/WhoIsCodeExperience';
+import { canReview, getViewer } from '../../lib/auth';
 export const metadata = { title: 'Who Is C.O.D.E.?' };
 
 export default async function AboutPage() {

@@ -1,11 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, canSubmit } from '../../lib/auth';
+import { getViewer, canSubmit, isSuperAdmin } from '../../lib/auth';
 import { createServerSupabaseClient, isDemoMode } from '../../lib/supabaseServerClient';
 import { validateSubmission } from '../../lib/validation';
 import { notifyOperationalEvent } from '../../lib/notifications';
 import { consumeRateLimit } from '../../lib/rateLimit';
+import { extractWithBedrock } from '../../lib/bedrockExtraction';
 
 const CONTENT_TABLES = Object.freeze({
   opportunity: 'opportunities',
@@ -121,8 +122,9 @@ export async function beginIntakeAction(input) {
 
   const contentType = CONTENT_TABLES[input?.contentType] ? input.contentType : null;
   if (!contentType) return { ok: false, error: 'Choose a valid content type.' };
-  if (!RELATIONSHIPS.has(input?.relationshipToSource)) {
-    return { ok: false, error: 'Tell us how this information reached Panther Hub.' };
+  const provisional = input?.provisional === true;
+  if (!provisional && !RELATIONSHIPS.has(input?.relationshipToSource)) {
+    return { ok: false, error: 'Choose your relationship to this submission.' };
   }
 
   let artifacts;
@@ -150,18 +152,26 @@ export async function beginIntakeAction(input) {
     .insert({
       submitter_id: viewer.role.id,
       content_type: contentType,
-      relationship_to_source: input.relationshipToSource,
+      relationship_to_source: provisional ? 'other' : input.relationshipToSource,
       referral_name: cleanText(input.referral?.name, 200) || null,
       referral_title: cleanText(input.referral?.title, 200) || null,
       referral_organization: cleanText(input.referral?.organization, 200) || null,
       referral_email: cleanText(input.referral?.email, 320).toLowerCase() || null,
       referral_may_display: Boolean(input.referral?.mayDisplay),
+      relationship_details: {
+        category: cleanText(input.relationshipDetails?.category, 80),
+        roleOrPosition: cleanText(input.relationshipDetails?.roleOrPosition, 200),
+        affiliation: cleanText(input.relationshipDetails?.affiliation, 200),
+        relationshipToSubmission: cleanText(input.relationshipDetails?.relationshipToSubmission, 500),
+        graduationYear: cleanText(input.relationshipDetails?.graduationYear, 20) || null,
+        organizerRole: cleanText(input.relationshipDetails?.organizerRole, 40) || null,
+      },
       state: 'processing',
     })
     .select('id')
     .single();
 
-  if (sessionError) return { ok: false, error: 'The intake session could not be created.' };
+  if (sessionError) return { ok: false, error: "We couldn't start your submission. Please try again." };
 
   const uploads = [];
   const sources = [];
@@ -205,6 +215,100 @@ export async function beginIntakeAction(input) {
   }
 
   return { ok: true, intakeSessionId: session.id, uploads, sources };
+}
+
+function safeBedrockErrorCode(error) {
+  const name = error?.name || error?.code || '';
+  if (name === 'AccessDeniedException') return 'access_denied';
+  if (name === 'ThrottlingException' || name === 'TooManyRequestsException') return 'throttled';
+  if (name === 'AbortError' || name === 'TimeoutError') return 'timeout';
+  if (name === 'ValidationException') return 'unsupported_input';
+  if (name === 'BEDROCK_NOT_CONFIGURED' || error?.message === 'BEDROCK_NOT_CONFIGURED') return 'not_configured';
+  if (name === 'MALFORMED_MODEL_RESPONSE' || error?.code === 'MALFORMED_MODEL_RESPONSE') return 'malformed_response';
+  return 'provider_unavailable';
+}
+
+function contributorExtractionResult(result) {
+  const provenance = Object.fromEntries(Object.entries(result?.technical?.provenance || {})
+    .map(([field, suggestion]) => [field, { value: suggestion?.value ?? null }]));
+  return {
+    ...result,
+    technical: {
+      provenance,
+      uncertain_fields: (result?.technical?.uncertain_fields || []).map((item) => ({ field: item.field, reason: item.reason })),
+    },
+  };
+}
+
+export async function extractIntakeAction(input) {
+  let viewer;
+  try {
+    viewer = await requireContributor();
+  } catch {
+    return { ok: false, code: 'unauthorized' };
+  }
+
+  if (!consumeRateLimit('bedrock-extraction', viewer.user.id, { limit: 12, windowMs: 15 * 60 * 1000 })) {
+    return { ok: false, code: 'rate_limited' };
+  }
+  const contentType = CONTENT_TABLES[input?.contentType] ? input.contentType : null;
+  if (!contentType || !/^[0-9a-f-]{36}$/i.test(input?.intakeSessionId || '')) {
+    return { ok: false, code: 'invalid_request' };
+  }
+  if (isDemoMode) return { ok: false, code: 'demo_mode' };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: session } = await supabase
+    .from('intake_sessions')
+    .select('id, content_type, state')
+    .eq('id', input.intakeSessionId)
+    .eq('submitter_id', viewer.role.id)
+    .eq('content_type', contentType)
+    .maybeSingle();
+  if (!session || session.state === 'submitted') return { ok: false, code: 'invalid_request' };
+
+  const { data: rows, error: sourceError } = await supabase
+    .from('source_artifacts')
+    .select('id, original_filename, storage_path, source_text, mime_type, byte_size')
+    .eq('intake_session_id', session.id)
+    .order('created_at');
+  if (sourceError || !rows?.length) return { ok: false, code: 'source_unavailable' };
+
+  const sources = [];
+  try {
+    for (const row of rows) {
+      if (row.source_text) {
+        sources.push({ id: row.id, name: row.original_filename || 'Pasted text', text: cleanText(row.source_text, 50000) });
+        continue;
+      }
+      if (!ALLOWED_MIME_TYPES.has(row.mime_type) || !row.storage_path) {
+        return { ok: false, code: 'unsupported_input' };
+      }
+      const declaredLimit = row.mime_type === 'application/pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES;
+      if (!Number.isSafeInteger(Number(row.byte_size)) || Number(row.byte_size) <= 0 || Number(row.byte_size) > declaredLimit) {
+        return { ok: false, code: 'oversized_input' };
+      }
+      const { data: file, error: downloadError } = await supabase.storage.from('intake-sources').download(row.storage_path);
+      if (downloadError || !file) return { ok: false, code: 'source_unavailable' };
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (bytes.byteLength > declaredLimit || !signatureMatches(bytes, row.mime_type)) {
+        return { ok: false, code: bytes.byteLength > declaredLimit ? 'oversized_input' : 'unsupported_input' };
+      }
+      sources.push({
+        id: row.id,
+        name: row.original_filename || 'Uploaded source',
+        mimeType: row.mime_type,
+        bytes,
+      });
+    }
+
+    const result = await extractWithBedrock({ contentType, sources });
+    return { ok: true, result: isSuperAdmin(viewer) ? result : contributorExtractionResult(result) };
+  } catch (error) {
+    const code = safeBedrockErrorCode(error);
+    console.warn('Bedrock extraction unavailable', { code, name: error?.name || 'Error' });
+    return { ok: false, code };
+  }
 }
 
 function signatureMatches(bytes, mimeType) {
@@ -271,6 +375,9 @@ export async function finalizeIntakeAction(input) {
 
   const table = CONTENT_TABLES[input?.contentType];
   if (!table) return { ok: false, error: 'Unknown content type.' };
+  if (input.contentType === 'event' && input.acknowledgmentAccepted !== true) {
+    return { ok: false, error: 'Confirm the submission acknowledgment before submitting this event.' };
+  }
 
   let payload;
   try {
@@ -281,6 +388,9 @@ export async function finalizeIntakeAction(input) {
 
   if (isDemoMode) return { ok: true, demo: true };
   if (!input.intakeSessionId) return { ok: false, error: 'The intake session is missing.' };
+  if (!RELATIONSHIPS.has(input?.relationshipToSource)) {
+    return { ok: false, error: 'Choose your relationship to this submission.' };
+  }
 
   const supabase = await createServerSupabaseClient();
   const { data: session } = await supabase
@@ -290,6 +400,24 @@ export async function finalizeIntakeAction(input) {
     .eq('submitter_id', viewer.role.id)
     .maybeSingle();
   if (!session) return { ok: false, error: 'The intake session could not be verified.' };
+
+  const { error: relationshipError } = await supabase.from('intake_sessions').update({
+    relationship_to_source: input.relationshipToSource,
+    referral_name: cleanText(input.referral?.name, 200) || null,
+    referral_title: cleanText(input.referral?.title, 200) || null,
+    referral_organization: cleanText(input.referral?.organization, 200) || null,
+    referral_email: cleanText(input.referral?.email, 320).toLowerCase() || null,
+    referral_may_display: Boolean(input.referral?.mayDisplay),
+    relationship_details: {
+      category: cleanText(input.relationshipDetails?.category, 80),
+      roleOrPosition: cleanText(input.relationshipDetails?.roleOrPosition, 200),
+      affiliation: cleanText(input.relationshipDetails?.affiliation, 200),
+      relationshipToSubmission: cleanText(input.relationshipDetails?.relationshipToSubmission, 500),
+      graduationYear: cleanText(input.relationshipDetails?.graduationYear, 20) || null,
+      organizerRole: cleanText(input.relationshipDetails?.organizerRole, 40) || null,
+    },
+  }).eq('id', session.id).eq('submitter_id', viewer.role.id);
+  if (relationshipError) return { ok: false, error: 'The submission relationship details could not be saved.' };
 
   const { data: sourceRows, error: sourceError } = await supabase.from('source_artifacts').select('id, storage_path, mime_type, byte_size').eq('intake_session_id', session.id);
   if (sourceError) return { ok: false, error: 'The source evidence could not be verified.' };
@@ -330,7 +458,7 @@ export async function finalizeIntakeAction(input) {
     }).eq('id', result.sourceArtifactId).eq('intake_session_id', session.id);
   }
 
-  const suggestionRows = Object.entries(input.suggestions || {}).slice(0, 50).map(([field, suggestion]) => ({
+  const suggestionRows = Object.entries(input.suggestions || {}).slice(0, 49).map(([field, suggestion]) => ({
     intake_session_id: session.id,
     source_artifact_id: suggestion?.sourceArtifactId || null,
     field_name: field.slice(0, 100),
@@ -344,6 +472,20 @@ export async function finalizeIntakeAction(input) {
     contributor_value: input.confirmedValues?.[field] ?? null,
     contributor_confirmed_at: new Date().toISOString(),
   }));
+  if (input.contentType === 'event') suggestionRows.push({
+    intake_session_id: session.id,
+    source_artifact_id: null,
+    field_name: 'submission_acknowledgment',
+    suggested_value: true,
+    source_text: null,
+    provider: 'contributor_confirmation',
+    parser_version: 'acknowledgment-v1',
+    confidence: 100,
+    review_reason: null,
+    needs_review: false,
+    contributor_value: true,
+    contributor_confirmed_at: new Date().toISOString(),
+  });
   if (suggestionRows.length) {
     const { error: suggestionError } = await supabase.from('field_suggestions').insert(suggestionRows);
     if (suggestionError) {
@@ -364,8 +506,15 @@ export async function finalizeIntakeAction(input) {
     .single();
 
   if (contentError) {
+    console.error('Final content insert failed', {
+      contentType: input.contentType,
+      code: contentError.code,
+      message: contentError.message,
+      details: contentError.details,
+      hint: contentError.hint,
+    });
     await supabase.from('intake_sessions').update({ state: 'failed' }).eq('id', session.id);
-    return { ok: false, error: 'The submission could not be saved.' };
+    return { ok: false, retained: true, intakeSessionId: session.id, error: 'The final submission could not be created.' };
   }
 
   await supabase
@@ -383,7 +532,8 @@ const FEEDBACK_ISSUES = new Set(['title', 'date', 'time', 'location', 'organizat
 
 export async function saveParserFeedbackAction(input) {
   try {
-    await requireContributor();
+    const viewer = await getViewer();
+    if (!viewer.user || !isSuperAdmin(viewer)) return { ok: false, error: 'Super Admin access required.' };
     if (!FEEDBACK_RATINGS.has(input?.rating)) return { ok: false, error: 'Choose a feedback rating.' };
     const issueFields = [...new Set(Array.isArray(input?.issueFields) ? input.issueFields : [])];
     if (issueFields.some((field) => !FEEDBACK_ISSUES.has(field))) return { ok: false, error: 'Choose valid issue fields.' };

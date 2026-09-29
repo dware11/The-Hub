@@ -20,6 +20,8 @@ export default function EventsAllBrowser({ events, initialDate = '' }) {
   const [filtersOpen, setFiltersOpen] = useState(Boolean(initialDate));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const organizations = useMemo(() => eventOrganizations(events), [events]);
+  const activeFilterCount = Boolean(category) + organizationsSelected.length + Boolean(specificDate || range !== 'upcoming');
 
   const shown = useMemo(() => {
     const now = new Date();
@@ -45,15 +47,16 @@ export default function EventsAllBrowser({ events, initialDate = '' }) {
     setSpecificDate('');
     setSort('soonest');
   };
+  const toggleOrganization = value => setOrganizationsSelected(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
 
   return <section className="events-all-section" id="all-events">
     <header className="events-all-heading"><div><div className="eyebrow">Event Browser</div><h2>Find what matters.</h2><p>Search the complete published event collection.</p></div><label>Sort by<select value={sort} onChange={event => setSort(event.target.value)}><option value="soonest">Soonest First</option><option value="latest">Latest First</option></select></label></header>
     <div className="events-all-toolbar">
       <label className="events-search"><span>Search events</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search events…" /></label>
-      <button type="button" className="events-filter-toggle" onClick={() => setFiltersOpen(value => !value)} aria-expanded={filtersOpen}>Filters{specificDate ? ' · date selected' : ''}</button>
+      <button type="button" className="events-filter-toggle" onClick={() => setFiltersOpen(value => !value)} aria-expanded={filtersOpen}>Filters{activeFilterCount ? ` · ${activeFilterCount} active` : ''}</button>
       <div className={`events-advanced-filters${filtersOpen ? ' is-open' : ''}`}>
         <label><span>Category</span><select value={category} onChange={event => setCategory(event.target.value)}><option value="">All Categories</option>{EVENT_FILTERS.slice(1).map(value => <option key={value}>{value}</option>)}</select></label>
-        {(category === 'Engineering Student Organizations' || organizationsSelected.length > 0) && <div className="events-organization-filter"><span>Organization</span><OrganizationPicker organizations={eventOrganizations(events)} selected={organizationsSelected} onToggle={value=>setOrganizationsSelected(current=>current.includes(value)?current.filter(item=>item!==value):[...current,value])} onClear={()=>setOrganizationsSelected([])} /></div>}
+        <div className="events-organization-filter"><span>Hosting organization</span><OrganizationPicker organizations={organizations} selected={organizationsSelected} onToggle={toggleOrganization} onClear={()=>setOrganizationsSelected([])} /></div>
         <label><span>Date range</span><select value={range} disabled={Boolean(specificDate)} onChange={event => setRange(event.target.value)}><option value="upcoming">Upcoming</option><option value="month">This Month</option><option value="all">All Time</option></select></label>
         <label><span>Specific date</span><input type="date" value={specificDate} onChange={event => setSpecificDate(event.target.value)} /></label>
         <button type="button" onClick={clear}>Clear Filters</button>

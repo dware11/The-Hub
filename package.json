@@ -12,13 +12,26 @@
     "test:impact": "node scripts/impact-static-check.mjs",
     "test:intake": "node scripts/intake-feedback-static-check.mjs",
     "test:parser": "node --experimental-vm-modules scripts/parser-real-examples-check.mjs",
-    "test:calendar": "node scripts/calendar-ics-static-check.mjs"
-    ,"test:editorial": "node scripts/editorial-filter-static-check.mjs"
-    ,"test:workflow": "node scripts/phase5-workflow-static-check.mjs"
-    ,"test:prehosting": "node scripts/prehosting-v1-static-check.mjs"
-    ,"test:hosted-hardening": "node scripts/hosted-mobile-security-static-check.mjs"
+    "test:parser-defects": "node --experimental-vm-modules scripts/parser-defect-check.mjs",
+    "test:calendar": "node scripts/calendar-ics-static-check.mjs",
+    "test:editorial": "node scripts/editorial-filter-static-check.mjs",
+    "test:workflow": "node scripts/phase5-workflow-static-check.mjs",
+    "test:prehosting": "node scripts/prehosting-v1-static-check.mjs",
+    "test:hosted-hardening": "node scripts/hosted-mobile-security-static-check.mjs",
+    "test:repair": "node scripts/auth-access-event-repair-static-check.mjs",
+    "test:auth-redirect": "node scripts/auth-redirect-static-check.mjs",
+    "test:auth-email": "node scripts/auth-email-error-static-check.mjs",
+    "test:signin-polish": "node scripts/signin-polish-static-check.mjs",
+    "test:workspace-gateway": "node scripts/workspace-gateway-static-check.mjs",
+    "test:submission-workflow": "node scripts/submission-workflow-static-check.mjs",
+    "test:bedrock": "node scripts/bedrock-extraction-static-check.mjs",
+    "test:reviewer-audit-ux": "node scripts/reviewer-audit-ux-static-check.mjs",
+    "test:role-management": "node scripts/manage-user-role-security-static-check.mjs",
+    "test:final-v1": "node scripts/final-v1-static-check.mjs",
+    "test:hosted-deployment": "node scripts/hosted-deployment-check.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "3.1136.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "next": "16.3.4",

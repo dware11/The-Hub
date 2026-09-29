@@ -136,6 +136,12 @@ npm run dev
 Runs in demo mode with no env vars at all. Copy `.env.local.example` to
 `.env.local` and fill it in to go live.
 
+Submission extraction uses Amazon Bedrock Nova 2 Lite on the server when
+`AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` are configured.
+`AWS_SESSION_TOKEN` is supported for temporary credentials. AWS credentials
+must never use a `NEXT_PUBLIC_` prefix. If Bedrock is unavailable, the existing
+local parser and manual-entry workflow remain available.
+
 ## Deploying
 
 Push to a GitHub repo and import it on [Vercel](https://vercel.com). Add

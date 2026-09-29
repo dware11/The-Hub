@@ -4,6 +4,7 @@ import { getOpportunity } from '../../../lib/data';
 import CalendarActions from '../../../components/CalendarActions';
 import EngagementTracker, { TrackedExternalLink } from '../../../components/EngagementTracker';
 import ReportIssueForm from '../../../components/ReportIssueForm';
+import { deadlineLabel, normalizeOpportunityClassifications, opportunityCompensationLabel } from '../../../lib/opportunityOptions';
 
 function displayDate(date) {
   return new Date(date + 'T00:00:00').toLocaleDateString();
@@ -14,6 +15,8 @@ export default async function OpportunityDetail({ params }) {
   const o = await getOpportunity(id);
   if (!o) return notFound();
   const isPvamuContact = /pvamu/i.test(o.contact_context || '') || /@pvamu\.edu$/i.test(o.contact_email || '');
+  const compensation = opportunityCompensationLabel(o.compensation_type, o.paid);
+  const classifications = normalizeOpportunityClassifications(o.classifications);
 
   return (
     <div className="page-wrap pb-16 opportunity-detail">
@@ -26,17 +29,12 @@ export default async function OpportunityDetail({ params }) {
         <div className="bg-white border border-line rounded-2xl p-8 opportunity-detail-main">
           <div className="flex gap-2 mb-4 opportunity-detail-tags">
             <span className="font-mono text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{o.type}</span>
-            {(o.compensation_type || o.paid) && <span className="font-mono text-[10px] bg-gold-100 text-gold-600 px-2 py-0.5 rounded">{o.compensation_type || 'Paid'}</span>}
+            {compensation !== 'Not specified' && <span className="font-mono text-[10px] bg-gold-100 text-gold-600 px-2 py-0.5 rounded">{compensation}</span>}
             {o.work_mode && <span className="font-mono text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{o.work_mode}</span>}
           </div>
           <h1 className="text-2xl mb-2">{o.title}</h1>
           <div className="flex items-center gap-2 text-sm text-slate mb-6">
             Organization: {o.org}
-            {o.verified && (
-              <span className="inline-flex items-center gap-1 font-mono text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
-                ✓ Verified
-              </span>
-            )}
           </div>
 
           <Section title="About this opportunity" className="opportunity-detail-section">
@@ -53,7 +51,7 @@ export default async function OpportunityDetail({ params }) {
             <ul className="text-sm leading-loose text-ink/80 list-disc pl-5">
               {o.location && <li><strong className="text-ink">Location:</strong> {o.location}</li>}
               <li><strong className="text-ink">Majors:</strong> {(o.majors || []).join(', ')}</li>
-              {o.classifications?.length > 0 && <li><strong className="text-ink">Classifications:</strong> {o.classifications.join(', ')}</li>}
+              {classifications.length > 0 && <li><strong className="text-ink">Classifications:</strong> {classifications.join(', ')}</li>}
               {o.work_mode && <li><strong className="text-ink">Format:</strong> {o.work_mode}</li>}
             </ul>
           </Section>
@@ -62,9 +60,9 @@ export default async function OpportunityDetail({ params }) {
         <div className="opportunity-detail-rail">
           <SideCard title="Apply" className="opportunity-side-card">
             <div className="font-mono text-xl text-coral mb-1">
-              {o.deadline ? displayDate(o.deadline) : 'Deadline not provided'}
+              {o.deadline ? displayDate(o.deadline) : deadlineLabel(o.deadline_type, null, o.posted_date)}
             </div>
-            {o.deadline && <div className="text-xs text-slate mb-4">Deadline to apply</div>}
+            <div className="text-xs text-slate mb-4">Application deadline</div>
             {o.link ? <TrackedExternalLink
               href={o.link}
               contentType="opportunity"
@@ -128,7 +126,7 @@ export default async function OpportunityDetail({ params }) {
               </TrackedExternalLink>
             </SideCard>
           )}
-          <ReportIssueForm contentType="opportunity" contentId={o.id} label="Report an issue" />
+          <ReportIssueForm contentType="opportunity" contentId={o.id} contentTitle={o.title} label="Report an issue with this opportunity" />
         </div>
       </div>
     </div>

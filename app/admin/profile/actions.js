@@ -14,5 +14,8 @@ export async function updateDisplayName(fullName) {
   const { data, error } = await supabase.rpc('update_my_display_name', { p_full_name: cleaned });
   if (error) return { ok: false, error: error.message };
   revalidatePath('/admin', 'layout');
+  revalidatePath('/panther-submit');
+  revalidatePath('/submit/event');
+  revalidatePath('/submit/opportunity');
   return { ok: true, data, fullName: cleaned };
 }

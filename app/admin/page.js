@@ -7,7 +7,7 @@ function ageDays(value, now = Date.now()) { const created = new Date(value || ''
 
 export default async function WorkspaceOverview() {
   const viewer = await getViewer();
-  if (!viewer.user) return <div className="workspace-auth-card"><h1>Sign in required</h1><p>Workspace access is reserved for approved C.O.D.E. contributors and reviewers.</p></div>;
+  if (!viewer.user) return <div className="workspace-auth-card"><h1>Sign in required</h1><p>This workspace requires authorized C.O.D.E. access. Sign in to continue; no protected workspace information is shown while signed out.</p><Link href="/auth/signin?next=%2Fadmin" className="gold-button">Sign in</Link></div>;
   if (!canReview(viewer)) return <div className="workspace-auth-card"><h1>Workspace access required</h1><p>Your account is signed in, but it does not have an approved workspace role.</p></div>;
   const [queue, metrics, requests] = await Promise.all([getPendingQueue(), getSubmissionMetrics(), getAccessRequests()]);
   const pending = Object.values(queue).flat();

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { eventCategories, eventCategoryClass } from '../lib/eventCategories';
+import { calendarWeekSegments, isContinuousMultiDayEvent } from '../lib/calendarLayout';
 import { eventDates } from '../lib/eventRecurrence';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -25,6 +26,7 @@ export default function EventsCalendar({ events }) {
     while (days.length % 7) days.push(null);
     return days;
   }, [cursor]);
+  const weeks = useMemo(() => Array.from({ length: cells.length / 7 }, (_, index) => cells.slice(index * 7, index * 7 + 7)), [cells]);
   const selectedEvents = selectedDate ? (byDate[selectedDate] || []) : [];
   const select = date => {
     const value = iso(date);
@@ -40,10 +42,35 @@ export default function EventsCalendar({ events }) {
       <div className="events-calendar-month"><button type="button" aria-label="Previous month" onClick={() => changeMonth(-1)}>←</button><div><span>Monthly view</span><h3>{cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3></div><button type="button" aria-label="Next month" onClick={() => changeMonth(1)}>→</button></div>
       <div className="events-calendar-scroll" tabIndex="0" aria-label="Scrollable monthly event calendar">
         <div className="events-calendar-grid" role="grid" aria-label={cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}>
-          {DAYS.map(day => <div className="events-weekday" role="columnheader" key={day}>{day}</div>)}
-          {cells.map((date, index) => date
-            ? <button type="button" className={`events-day${iso(date) === iso(now) ? ' is-today' : ''}${selectedDate === iso(date) ? ' is-selected' : ''}${byDate[iso(date)]?.length ? ' has-events' : ''}`} role="gridcell" aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${byDate[iso(date)]?.length ? `, ${byDate[iso(date)].length} events` : ', no events'}`} aria-pressed={selectedDate === iso(date)} onClick={() => select(date)} key={iso(date)}><span>{date.getDate()}</span><div className="events-day-items">{(byDate[iso(date)] || []).slice(0, 2).map(event => <i className={eventCategoryClass(event)} key={event.occurrence_key || event.id}>{event.title}</i>)}{(byDate[iso(date)] || []).length > 2 && <small>+{byDate[iso(date)].length - 2} more</small>}</div></button>
-            : <div className="events-day is-blank" role="gridcell" aria-hidden="true" key={`blank-${index}`} />)}
+          <div className="events-calendar-weekdays" role="row">{DAYS.map(day => <div className="events-weekday" role="columnheader" key={day}>{day}</div>)}</div>
+          {weeks.map((week, weekIndex) => {
+            const weekDates = week.map(date => date ? iso(date) : null);
+            const segments = calendarWeekSegments(weekDates, events);
+            const laneCount = segments.length ? Math.max(...segments.map(segment => segment.lane)) + 1 : 0;
+            const compactLanes = laneCount >= 4;
+            const laneHeight = compactLanes ? 18 : 20;
+            const laneGap = compactLanes ? 3 : 4;
+            return <div className="events-calendar-week" role="row" style={{ '--range-lane-height': `${laneHeight}px`, '--range-lane-gap': `${laneGap}px`, '--range-space': `${laneCount ? laneCount * laneHeight + Math.max(0, laneCount - 1) * laneGap + 6 : 0}px` }} key={`week-${weekIndex}`}>
+              <div className="events-week-cells" role="presentation">
+                {week.map((date, dayIndex) => date
+                  ? (() => {
+                    const dateValue = iso(date);
+                    const ordinaryEvents = (byDate[dateValue] || []).filter(event => !isContinuousMultiDayEvent(event));
+                    return <button type="button" className={`events-day${dateValue === iso(now) ? ' is-today' : ''}${selectedDate === dateValue ? ' is-selected' : ''}${byDate[dateValue]?.length ? ' has-events' : ''}`} role="gridcell" aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${byDate[dateValue]?.length ? `, ${byDate[dateValue].length} events` : ', no events'}`} aria-pressed={selectedDate === dateValue} onClick={() => select(date)} key={dateValue}><span>{date.getDate()}</span><div className="events-day-items">{ordinaryEvents.slice(0, 2).map(event => <i className={`${eventCategoryClass(event)}${event.recurrence_type === 'weekly' ? ' is-recurring' : ''}`} key={event.occurrence_key || event.id}>{event.recurrence_type === 'weekly' && <span aria-hidden="true">↻ </span>}{event.title}</i>)}{ordinaryEvents.length > 2 && <small>+{ordinaryEvents.length - 2} more</small>}</div></button>;
+                  })()
+                  : <div className="events-day is-blank" role="gridcell" aria-hidden="true" key={`blank-${weekIndex}-${dayIndex}`} />)}
+              </div>
+              {segments.length > 0 && <div className="events-week-spans" role="presentation">
+                {segments.map(({ event, startColumn, endColumn, lane, continuesBefore, continuesAfter }) => <Link
+                  className={`${eventCategoryClass(event)}${continuesBefore ? ' continues-before' : ''}${continuesAfter ? ' continues-after' : ''}`}
+                  href={`/events/${event.id}`}
+                  key={`${event.occurrence_key || event.id}:${weekIndex}`}
+                  style={{ gridColumn: `${startColumn} / ${endColumn}`, gridRow: lane + 1 }}
+                  aria-label={`${event.title}, ${localDate(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} through ${localDate(event.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                ><strong>{event.title}</strong><span>{localDate(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}–{localDate(event.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></Link>)}
+              </div>}
+            </div>;
+          })}
         </div>
       </div>
     </div>

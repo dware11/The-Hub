@@ -14,14 +14,16 @@ const proxy = read('proxy.js');
 const digestRoute = read('app/api/cron/weekly-digest/route.js');
 const bootstrap = read('supabase/bootstrap/first_super_admin.sql');
 const selfReviewHardening = read('supabase/migrations/20260908184025_prevent_reviewer_self_review.sql');
+const roleManagementRepair = read('supabase/migrations/20260923142441_repair_manage_user_role_authorization.sql');
 
 assert.match(auth, /export function canSubmit[\s\S]*\['super_admin', 'admin', 'reviewer', 'contributor'\]/);
 assert.match(auth, /export function canReview[\s\S]*\['super_admin', 'admin', 'reviewer'\]/);
 assert.match(auth, /export function isAdmin[\s\S]*\['super_admin', 'admin'\]/);
 assert.doesNotMatch(auth, /platform_admin|code_officer/);
 
-for (const path of ['/submit', '/panther-submit', '/admin/review']) assert.ok(redirects.includes(`'${path}'`));
-assert.match(redirects, /return '\/submit'/);
+for (const path of ['/submit', '/panther-submit', '/workspace']) assert.ok(redirects.includes(`'${path}'`));
+assert.match(redirects, /path === '\/admin' \|\| path\.startsWith\('\/admin\/'\)[\s\S]*return '\/workspace'/);
+assert.match(redirects, /optionalSafeAuthDestination\(value\) \|\| '\/submit'/);
 assert.match(callback, /safeAuthDestination/);
 assert.match(callback, /role_claim_failed/);
 
@@ -81,5 +83,16 @@ for (const entryPoint of ['record_review_evidence', 'review_content', 'request_r
 }
 assert.equal((selfReviewHardening.match(/target_submitter_id = actor\.id/g) || []).length, 3);
 assert.equal((selfReviewHardening.match(/Reviewers cannot review or modify review evidence for their own submission/g) || []).length, 3);
+
+assert.match(roleManagementRepair, /if \(select auth\.uid\(\)\) is null[\s\S]*Authentication required/);
+assert.match(roleManagementRepair, /actor\.role not in \('admin', 'super_admin'\)[\s\S]*Active administrator role required/);
+assert.match(roleManagementRepair, /actor\.role = 'admin'[\s\S]*p_role not in \('contributor', 'reviewer'\)[\s\S]*target\.role in \('admin', 'super_admin'\)/);
+assert.match(roleManagementRepair, /target\.id = actor\.id[\s\S]*You cannot deactivate or change your own role/);
+assert.match(roleManagementRepair, /target\.role = 'super_admin'[\s\S]*p_role <> 'super_admin' or p_status <> 'active'/);
+assert.match(roleManagementRepair, /At least one active super administrator is required/);
+assert.match(roleManagementRepair, /set search_path = ''/);
+assert.match(roleManagementRepair, /revoke all on function public\.manage_user_role\(uuid, text, text\)[\s\S]*from public, anon, authenticated/);
+assert.match(roleManagementRepair, /grant execute on function public\.manage_user_role\(uuid, text, text\)[\s\S]*to authenticated/);
+assert.doesNotMatch(roleManagementRepair, /grant\s+all|service_role/i);
 
 console.log('RBAC static checks passed: role matrix, email-auth path, callback allowlist, production guard, migration policies/RPCs, and review path.');

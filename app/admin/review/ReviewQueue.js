@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { approveItem, rejectItem, requestCorrection } from './actions';
 import { activeReviewType, boundedReviewItems, reviewQueueCounts } from '../../../lib/reviewQueue';
+import { REVIEW_CHECKS, isReviewChecklistComplete, reviewEvidence } from '../../../lib/reviewChecklist';
+import { deadlineLabel } from '../../../lib/opportunityOptions';
 
 const PAGE_SIZE = 6;
 const SECTIONS = [
@@ -46,25 +48,33 @@ function displaySuggestion(value) {
   try { return JSON.stringify(value); } catch { return 'Structured value'; }
 }
 
-function IntakeEvidence({ evidence }) {
+function IntakeIdentity({ item, evidence }) {
+  if (!evidence || !item?.date) return null;
+  return <div className="review-identity-grid">
+    <section><strong>Submitted by</strong><span>{item.submitted_by?.full_name || 'Name not provided'}</span><small>{item.submitted_by?.email || 'Email not provided'}</small><small>{evidence.relationshipLabel}</small></section>
+    <section><strong>Event organizer</strong><span>{evidence.organizer?.organization || item.org || 'Hosting organization not provided'}</span><small>{evidence.organizer?.name || item.contact_name || 'Official contact name not provided'}</small><small>{evidence.organizer?.email || item.contact_email || 'Official contact email not provided'}</small></section>
+  </div>;
+}
+
+function IntakeEvidence({ evidence, item, showTechnical = false }) {
   if (!evidence) return null;
   return <details className="review-details review-evidence">
-    <summary>Private source evidence &amp; extraction</summary>
-    <p className="review-private-note"><strong>Reviewer only.</strong> Private file links expire after 10 minutes and are never shown on public content pages.</p>
-    <div className="review-key-meta"><span>Source relationship: {(evidence.relationship_to_source || 'not recorded').replaceAll('_', ' ')}</span><span>Intake state: {evidence.state || 'submitted'}</span></div>
-    {evidence.artifacts?.length ? <div className="review-evidence-group"><strong>Source attachments</strong><ul>{evidence.artifacts.map((artifact) => <li key={artifact.id}>
-      {artifact.signed_url ? <a href={artifact.signed_url} target="_blank" rel="noreferrer">{artifact.original_filename || artifact.source_type || 'Private source'} ↗</a> : artifact.source_text ? <details><summary>{artifact.original_filename || 'Pasted text'}</summary><pre className="review-source-text">{artifact.source_text}</pre></details> : <span>{artifact.original_filename || artifact.source_type || 'Private source'} — secure evidence unavailable</span>}
-      <small>{artifact.source_type} · {artifact.processing_status}</small>
+    <summary>Submission details &amp; source</summary>
+    <p className="review-private-note"><strong>Review before deciding.</strong> Compare the submitted details with the original source. These private links are never shown on public content pages.</p>
+    <IntakeIdentity item={item} evidence={evidence} />
+    {!item?.date && <div className="review-key-meta"><span>Source relationship: {evidence.relationshipLabel}</span></div>}
+    {evidence.artifacts?.length ? <div className="review-evidence-group"><strong>Original source</strong><ul>{evidence.artifacts.map((artifact) => <li key={artifact.id}>
+      {artifact.signedUrl ? <a href={artifact.signedUrl} target="_blank" rel="noreferrer">View {artifact.displayName} ↗</a> : artifact.sourceText ? <details><summary>View {artifact.displayName}</summary><pre className="review-source-text">{artifact.sourceText}</pre></details> : <span>{artifact.displayName} — source unavailable</span>}
     </li>)}</ul></div> : <p>No private source attachment was recorded.</p>}
-    {evidence.suggestions?.length ? <div className="review-evidence-group"><strong>Parser provenance</strong><ul>{evidence.suggestions.map((suggestion) => <li key={suggestion.id}>
-      <span><strong>{suggestion.field_name}:</strong> {displaySuggestion(suggestion.suggested_value)}</span>
-      <small>{suggestion.provider} · {suggestion.parser_version}{Number.isFinite(suggestion.confidence) ? ` · ${suggestion.confidence}% confidence` : ' · confidence unavailable'}{suggestion.needs_review ? ' · reviewer confirmation requested' : ''}</small>
-      {suggestion.review_reason && <small>{suggestion.review_reason}</small>}
-    </li>)}</ul></div> : <p>No parser suggestions were recorded for this intake.</p>}
+    {evidence.suggestions?.length ? <div className="review-evidence-group"><strong>Details to confirm</strong><ul>{evidence.suggestions.map((suggestion) => <li key={suggestion.id}>
+      <span><strong>{suggestion.label}:</strong> {displaySuggestion(suggestion.value)}</span>
+      <small>{suggestion.needsReview ? 'Needs careful verification against the source.' : 'Confirm against the source before deciding.'}</small>
+    </li>)}</ul></div> : <p>No suggested values were recorded. Verify the submitted details directly against the source.</p>}
+    {showTechnical && evidence.diagnostics && <details className="review-details"><summary>Technical diagnostics</summary><div className="review-key-meta"><span>Intake state: {evidence.diagnostics.intakeState || 'not recorded'}</span><span>Acknowledgment: {evidence.diagnostics.acknowledgment ? 'accepted' : 'not recorded'}</span></div>{evidence.diagnostics.artifacts?.length ? <ul>{evidence.diagnostics.artifacts.map((artifact) => <li key={artifact.id}>{artifact.sourceType || 'unknown source'}: {artifact.processingStatus || 'status unavailable'}{artifact.mimeType ? ` · ${artifact.mimeType}` : ''}</li>)}</ul> : null}{evidence.diagnostics.suggestions?.length ? <ul>{evidence.diagnostics.suggestions.map((suggestion) => <li key={suggestion.id}><strong>{suggestion.fieldName}</strong>: {suggestion.provider || 'provider unavailable'} / {suggestion.parserVersion || 'parser unavailable'}{Number.isFinite(suggestion.confidence) ? ` / ${suggestion.confidence}% confidence` : ''}{suggestion.reviewReason ? ` · ${suggestion.reviewReason}` : ''}</li>)}</ul> : <p>No extraction diagnostics were recorded.</p>}</details>}
   </details>;
 }
 
-export default function ReviewQueue({ queue }) {
+export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId = null }) {
   const [items, setItems] = useState(queue);
   const [pendingId, setPendingId] = useState(null);
   const [message, setMessage] = useState('');
@@ -94,20 +104,24 @@ export default function ReviewQueue({ queue }) {
   }
 
   function decide(type, key, item, action) {
-    if (action === 'approve' && !Object.values(checklist[item.id] || {}).every(Boolean)) { setMessage(`${item.title} cannot be approved until every review checklist item is confirmed.`); return; }
+    if (!isReviewChecklistComplete(checklist[item.id])) { setMessage(`${item.title} cannot receive a final decision until every review checklist item is confirmed.`); return; }
     setPendingId(item.id);
     setMessage(`${action === 'approve' ? 'Approving' : 'Rejecting'} ${item.title}.`);
     startTransition(async () => {
-      const currentChecklist = checklist[item.id] || {};
-      const evidence = { official_source_opened: Boolean(currentChecklist.source), primary_link_checked: Boolean(currentChecklist.facts), essential_facts_verified: Boolean(currentChecklist.facts), contact_organization_verified: Boolean(currentChecklist.contact), safe_content_confirmed: Boolean(currentChecklist.safe), reviewer_notes: reviewNote };
-      const result = action === 'approve' ? await approveItem(type, item.id, evidence) : await rejectItem(type, item.id, reviewNote, evidence);
-      if (result.ok) {
-        setItems((previous) => ({ ...previous, [key]: previous[key].filter((candidate) => candidate.id !== item.id) }));
-        setMessage(`${item.title} was ${action === 'approve' ? 'approved and published' : 'rejected'}.`);
-      } else {
-        setMessage(`${item.title} could not be updated. ${result.error || 'Try again.'}`);
+      try {
+        const evidence = reviewEvidence(checklist[item.id], reviewNote);
+        const result = action === 'approve' ? await approveItem(type, item.id, evidence) : await rejectItem(type, item.id, reviewNote, evidence);
+        if (result.ok) {
+          setItems((previous) => ({ ...previous, [key]: previous[key].filter((candidate) => candidate.id !== item.id) }));
+          setMessage(`${item.title} was ${action === 'approve' ? 'approved and published' : 'rejected'}.`);
+          setReviewItem(null);
+          router.refresh();
+        } else setMessage(`${item.title} could not be updated. ${result.error || 'Try again.'}`);
+      } catch (error) {
+        setMessage(`${item.title} could not be updated. ${error?.message || 'Try again.'}`);
+      } finally {
+        setPendingId(null);
       }
-      setPendingId(null);
     });
   }
 
@@ -130,6 +144,7 @@ export default function ReviewQueue({ queue }) {
         <div className="review-card-list">{boundedReviewItems(items[key], visible[key]).map((item) => {
           const working = busy && pendingId === item.id;
           const itemPriority=priority(item);
+          const ownSubmission = Boolean(viewerRoleId && item.submitted_by?.id === viewerRoleId);
           return <article className={`card review-card priority-${itemPriority}`} key={item.id}>
             <div className="review-card-heading">
               <div>
@@ -138,17 +153,18 @@ export default function ReviewQueue({ queue }) {
                 <div className="review-card-age">Submitted {new Date(item.created_at).toLocaleString()} · Waiting {age(item.created_at)}</div>
               </div>
             <div className="review-card-actions" aria-label={`Review actions for ${item.title}`}>
-                <button disabled={working} onClick={() => { setReviewItem({ type, key, item }); setReviewNote(''); }} className="chip">Reject</button>
-                <button disabled={working} onClick={() => { setReviewItem({ type, key, item }); setReviewNote(''); }} className="gold-button">Review checklist</button>
+                {ownSubmission
+                  ? <span className="review-self-notice" role="status">Another reviewer must review this submission.</span>
+                  : <button disabled={working} onClick={() => { setReviewItem({ type, key, item }); setReviewNote(''); setMessage(''); }} className="gold-button">Review checklist</button>}
               </div>
             </div>
             <div className="review-key-meta">
               {item.date && <span>Event {new Date(`${item.date}T12:00:00`).toLocaleDateString()}</span>}
-              {item.deadline && <span>Deadline {new Date(`${item.deadline}T12:00:00`).toLocaleDateString()}</span>}
+              {type === 'opportunity' && <span>{item.deadline ? `Deadline ${new Date(`${item.deadline}T12:00:00`).toLocaleDateString()}` : deadlineLabel(item.deadline_type, null, item.posted_date)}</span>}
               {item.location && <span>{item.location}</span>}
             </div>
             <SourceLinks item={item} />
-            <IntakeEvidence evidence={item.intake_evidence} />
+            <IntakeEvidence evidence={item.intake_evidence} item={item} showTechnical={showTechnical} />
             {(item.description || item.body || item.eligibility || item.contact_name || item.contact_email) && <details className="review-details">
               <summary>View details</summary>
               {(item.description || item.body) && <p>{item.description || item.body}</p>}
@@ -162,6 +178,6 @@ export default function ReviewQueue({ queue }) {
         {visible[key] < items[key].length && <button type="button" className="review-show-more" onClick={() => setVisible((previous) => ({ ...previous, [key]: previous[key] + PAGE_SIZE }))}>Show {Math.min(PAGE_SIZE, items[key].length - visible[key])} more {label.toLowerCase()} <span>({items[key].length - visible[key]} remaining)</span></button>}
       </section>)}
     </div>
-    {reviewItem && <dialog open className="review-dialog" aria-labelledby="review-dialog-title" onKeyDown={e=>{if(e.key==='Escape')setReviewItem(null)}}><div className="review-dialog-card"><button className="review-dialog-close" aria-label="Close review checklist" onClick={()=>setReviewItem(null)}>×</button><h2 id="review-dialog-title">Verify &amp; decide</h2><p>Complete each confirmation before approving. The Hub does not automatically verify source links.</p>{[['source','Official source opened'],['facts','Title, date/deadline, location, and eligibility facts match the source'],['contact','Contact, organization, and submitted-by distinctions make sense'],['safe','Content is safe and appropriate']].map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(checklist[reviewItem.item.id]?.[key])} onChange={e=>setChecklist({...checklist,[reviewItem.item.id]:{...(checklist[reviewItem.item.id]||{}),[key]:e.target.checked}})} /> {label}</label>)}<label>Needs correction / review note<textarea rows="3" value={reviewNote} onChange={e=>setReviewNote(e.target.value)} placeholder="Required for correction requests or rejection." /></label><div className="review-dialog-actions"><button className="chip" onClick={async()=>{if(!reviewNote.trim()){setMessage('Add a note before requesting correction.');return;}const result=await requestCorrection(reviewItem.type,reviewItem.item.id,reviewNote);setMessage(result.ok?'Correction request recorded and audited.':result.error||'Correction request failed.');setReviewItem(null)}}>Needs correction</button><button className="chip" onClick={()=>{decide(reviewItem.type,reviewItem.key,reviewItem.item,'reject');setReviewItem(null)}}>Reject</button><button className="gold-button" onClick={()=>{decide(reviewItem.type,reviewItem.key,reviewItem.item,'approve');setReviewItem(null)}}>Approve &amp; publish</button></div></div></dialog>}
+    {reviewItem && <dialog open className="review-dialog" aria-labelledby="review-dialog-title" onKeyDown={e=>{if(e.key==='Escape'&&!pendingId)setReviewItem(null)}}><div className="review-dialog-card"><button className="review-dialog-close" disabled={Boolean(pendingId)} aria-label="Close review checklist" onClick={()=>setReviewItem(null)}>×</button><h2 id="review-dialog-title">Verify &amp; decide</h2><p>Complete each confirmation before making a final decision. The Hub does not automatically verify source links.</p>{REVIEW_CHECKS.map(([key,label])=><label key={key}><input type="checkbox" disabled={Boolean(pendingId)} checked={Boolean(checklist[reviewItem.item.id]?.[key])} onChange={e=>setChecklist({...checklist,[reviewItem.item.id]:{...(checklist[reviewItem.item.id]||{}),[key]:e.target.checked}})} /> {label}</label>)}<label>Correction / rejection note<textarea rows="3" disabled={Boolean(pendingId)} value={reviewNote} onChange={e=>setReviewNote(e.target.value)} placeholder="Required for correction requests or rejection." /></label><p className="workspace-status" role="status" aria-live="assertive">{message}</p><div className="review-dialog-actions"><button className="gold-button" disabled={Boolean(pendingId)||!isReviewChecklistComplete(checklist[reviewItem.item.id])} onClick={()=>decide(reviewItem.type,reviewItem.key,reviewItem.item,'approve')}>Approve &amp; Publish</button><button className="chip" disabled={Boolean(pendingId)||!isReviewChecklistComplete(checklist[reviewItem.item.id])} onClick={async()=>{if(!reviewNote.trim()){setMessage('Add a note before requesting correction.');return;}setPendingId(reviewItem.item.id);try{const result=await requestCorrection(reviewItem.type,reviewItem.item.id,reviewNote,reviewEvidence(checklist[reviewItem.item.id],reviewNote));if(result.ok){setItems((previous)=>({...previous,[reviewItem.key]:previous[reviewItem.key].filter((candidate)=>candidate.id!==reviewItem.item.id)}));setMessage('Correction request recorded.');setReviewItem(null);router.refresh();}else setMessage(result.error||'Correction request failed.');}catch(error){setMessage(error?.message||'Correction request failed.');}finally{setPendingId(null)}}}>Request Correction</button><button className="chip" disabled={Boolean(pendingId)||!isReviewChecklistComplete(checklist[reviewItem.item.id])} onClick={()=>decide(reviewItem.type,reviewItem.key,reviewItem.item,'reject')}>Reject</button></div></div></dialog>}
   </div></>;
 }

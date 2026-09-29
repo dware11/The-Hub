@@ -34,6 +34,15 @@ const expectedOrder = [
   '20260909145833_pre_hosting_v1_multiday_reports_upload_hardening.sql',
   '20260910021330_hosted_mobile_security_hardening.sql',
   '20260910044904_final_hosted_uat_admin_controls.sql',
+  '20260910202541_allow_optional_event_contact_and_location.sql',
+  '20260921012939_submission_status_dashboard.sql',
+  '20260921121146_enforce_v1_home_caps.sql',
+  '20260921124235_restrict_issues_to_super_admin.sql',
+  '20260923142441_repair_manage_user_role_authorization.sql',
+  '20260924164542_complete_opportunity_submission_workflow.sql',
+  '20260927234958_add_apply_asap_availability_review.sql',
+  '20260928134549_submission_clarity_and_super_admin_parser_feedback.sql',
+  '20260929181148_add_organization_addition_issue_type.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -64,6 +73,14 @@ const workflowRepairs = readMigration('20260909042638_phase5_workflow_repairs.sq
 const workflowTriggerAcl = readMigration('20260909043658_phase5_duplicate_trigger_acl.sql');
 const preHosting = readMigration('20260909145833_pre_hosting_v1_multiday_reports_upload_hardening.sql');
 const finalHostedUat = readMigration('20260910044904_final_hosted_uat_admin_controls.sql');
+const optionalEventFields = readMigration('20260910202541_allow_optional_event_contact_and_location.sql');
+const submissionStatus = readMigration('20260921012939_submission_status_dashboard.sql');
+const v1HomeCaps = readMigration('20260921121146_enforce_v1_home_caps.sql');
+const issueAccess = readMigration('20260921124235_restrict_issues_to_super_admin.sql');
+const roleManagementRepair = readMigration('20260923142441_repair_manage_user_role_authorization.sql');
+const opportunitySubmissionWorkflow = readMigration('20260924164542_complete_opportunity_submission_workflow.sql');
+const applyAsapAvailability = readMigration('20260927234958_add_apply_asap_availability_review.sql');
+const submissionClarity = readMigration('20260928134549_submission_clarity_and_super_admin_parser_feedback.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -162,5 +179,47 @@ for (const control of ['manage_home_event', 'hard_delete_content', 'update_my_di
 assert.match(finalHostedUat, /if not public\.is_super_admin\(\)/, 'Permanent deletion must be restricted to super_admin');
 assert.match(finalHostedUat, /revoke all on function public\.hard_delete_content\(text,uuid,text\) from public,anon,authenticated/, 'Permanent deletion RPC must be fail-closed by default');
 assert.doesNotMatch(finalHostedUat, /grant\s+all/i, 'Final hosted UAT migration must not grant broad privileges');
+for (const column of ['location', 'contact_name', 'contact_email']) {
+  assert.match(optionalEventFields, new RegExp(`alter column ${column} drop not null`), `Event ${column} must become nullable`);
+}
+assert.doesNotMatch(optionalEventFields, /policy|grant|revoke|organization|drop\s+column/i, 'Optional Event fields migration must not alter authorization, organization requirements, or remove columns');
+for (const control of ['relationship_details jsonb', 'submission_dashboard_dismissals', 'get_my_submission_status', 'dismiss_own_submission', 'security definer', 'review_verification_evidence']) assert.ok(submissionStatus.includes(control), `Submission status control missing: ${control}`);
+assert.doesNotMatch(submissionStatus, /grant\s+all/i, 'Submission status migration must not grant broad privileges');
+for (const control of ['enforce_v1_home_content_state', 'Home Spotlight is limited to 3 active items', 'limited to 7 active items', 'pg_advisory_xact_lock', "new.status <> 'published'"]) assert.ok(v1HomeCaps.includes(control), `V1 home cap control missing: ${control}`);
+assert.match(v1HomeCaps, /revoke all on function public\.manage_home_spotlight\(text,uuid,boolean,smallint\) from public,anon/, 'Spotlight management must remain fail-closed for public and anonymous callers');
+assert.doesNotMatch(v1HomeCaps, /grant\s+all/i, 'V1 home cap migration must not grant broad privileges');
+for (const control of ['drop policy if exists "admins read issue reports"', 'super admins read issue reports', 'super admins update issue reports', 'public.is_super_admin()']) assert.ok(issueAccess.includes(control), `Super Admin issue access control missing: ${control}`);
+assert.doesNotMatch(issueAccess, /delete\s+from|truncate|drop\s+table/i, 'Issue access migration must preserve issue records and history');
+for (const control of [
+  "actor.role not in ('admin', 'super_admin')",
+  'Active administrator role required',
+  "actor.role = 'admin'",
+  "p_role not in ('contributor', 'reviewer')",
+  "target.role in ('admin', 'super_admin')",
+  "p_role <> 'super_admin' or p_status <> 'active'",
+  "set search_path = ''",
+  'revoke all on function public.manage_user_role(uuid, text, text)',
+  'from public, anon, authenticated',
+  'grant execute on function public.manage_user_role(uuid, text, text)',
+  'to authenticated',
+]) assert.ok(roleManagementRepair.includes(control), `Role-management repair control missing: ${control}`);
+assert.doesNotMatch(roleManagementRepair, /grant\s+all|service_role/i, 'Role-management repair must not broaden privileges or introduce service-role access');
+for (const control of [
+  'alter column deadline drop not null',
+  'deadline_type text not null',
+  'opportunities_deadline_state_check',
+  'enforce_v1_announcement_home_state',
+  "jsonb_build_object('title',o.title,'org',o.org,'deadline_type',o.deadline_type",
+]) assert.ok(opportunitySubmissionWorkflow.includes(control), `Opportunity submission workflow control missing: ${control}`);
+assert.doesNotMatch(opportunitySubmissionWorkflow, /drop\s+table|delete\s+from|truncate|grant\s+all/i, 'Opportunity workflow migration must be additive and non-destructive');
+for (const control of [
+  'opportunity_availability_reviews',
+  'enable row level security',
+  'public.is_super_admin()',
+  'revoke all on table public.opportunity_availability_reviews from public, anon',
+]) assert.ok(applyAsapAvailability.includes(control), `Apply ASAP availability control missing: ${control}`);
+assert.doesNotMatch(applyAsapAvailability, /alter\s+table\s+public\.opportunities|drop\s+table|truncate|grant\s+all/i, 'Availability maintenance must remain private and additive');
+for (const control of ['add column if not exists posted_date date', 'super admins read parser feedback', "role = 'super_admin'", 'get_my_submission_status']) assert.ok(submissionClarity.includes(control), `Submission clarity control missing: ${control}`);
+assert.doesNotMatch(submissionClarity, /drop\s+table|truncate|delete\s+from|grant\s+all/i, 'Submission clarity migration must preserve data and least privilege');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);

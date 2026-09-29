@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { MAJORS } from '../lib/sampleData';
 import { matchesSearch } from '../lib/search';
+import { OPPORTUNITY_CLASSIFICATIONS, OPPORTUNITY_TYPES, deadlineLabel, normalizeOpportunityClassifications, opportunityCompensationLabel } from '../lib/opportunityOptions';
 
 const PAGE_SIZES = [10, 20, 50];
 
@@ -12,10 +13,10 @@ function values(items, field, fallback = []) {
   return [...new Set([...fallback, ...found].filter((value) => value && !String(value).toLowerCase().startsWith('all ')))];
 }
 
-function matchesList(itemValues, selected, allLabel) {
+function matchesClassification(itemValues, selected) {
   if (!selected) return true;
   const list = Array.isArray(itemValues) ? itemValues : [];
-  return list.includes(selected) || list.includes(allLabel);
+  return list.includes('All classifications') || normalizeOpportunityClassifications(list).includes(selected);
 }
 
 export default function OpportunitiesBrowser({ items }) {
@@ -30,9 +31,9 @@ export default function OpportunitiesBrowser({ items }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const options = useMemo(() => ({
-    types: values(items, 'type', ['Internship', 'Co-op', 'Research', 'Scholarship', 'Competition']),
+    types: values(items, 'type', OPPORTUNITY_TYPES.filter((value) => value !== 'Other')),
     majors: values(items, 'majors', MAJORS).filter(value => !['Cybersecurity', 'Data Analytics'].includes(value)),
-    classifications: values(items, 'classifications', ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate']),
+    classifications: OPPORTUNITY_CLASSIFICATIONS,
   }), [items]);
 
   const filtered = useMemo(() => items.filter((item) => {
@@ -40,9 +41,9 @@ export default function OpportunitiesBrowser({ items }) {
     return matchesSearch([item.title,item.org,item.description], search)
       && (!type || item.type === type)
       && (!majors.length || (item.majors || []).includes('All majors') || (item.majors || []).some(value => majors.includes(value)))
-      && matchesList(item.classifications, classification, 'All classifications')
+      && matchesClassification(item.classifications, classification)
       && (!workMode || item.work_mode === workMode)
-      && (!compensation || itemCompensation === compensation);
+      && (!compensation || (compensation === 'Paid / Funded' ? ['Paid', 'Funded'].includes(itemCompensation) || item.paid : itemCompensation === compensation));
   }), [items, search, type, majors, classification, workMode, compensation]);
 
   useEffect(() => setPage(1), [type, majors, classification, workMode, compensation, search, pageSize]);
@@ -66,7 +67,7 @@ export default function OpportunitiesBrowser({ items }) {
       <MajorFilter options={options.majors} selected={majors} onChange={setMajors} />
       <Filter label="Classification" value={classification} onChange={setClassification} options={options.classifications} />
       <Filter label="Format" value={workMode} onChange={setWorkMode} options={['Remote', 'Hybrid', 'In person']} />
-      <Filter label="Compensation" value={compensation} onChange={setCompensation} options={['Paid', 'Funded', 'Unpaid', 'Not specified']} />
+      <Filter label="Compensation" value={compensation} onChange={setCompensation} options={['Paid / Funded', 'Unpaid', 'Not specified']} />
       <button type="button" className="clear-filters opportunity-clear-mobile" onClick={clearFilters}>Clear filters</button>
       <button type="button" className="apply-filters" onClick={() => setFiltersOpen(false)}>Apply filters</button>
     </section>
@@ -78,12 +79,12 @@ export default function OpportunitiesBrowser({ items }) {
 
     {visible.length ? <div className="opportunity-list">{visible.map((item) => {
       const deadlinePassed = item.deadline && new Date(item.deadline + 'T23:59:59') < new Date();
-      const compensationLabel = item.compensation_type && item.compensation_type !== 'Not specified' ? item.compensation_type : (item.paid ? 'Paid' : null);
+      const compensationLabel = opportunityCompensationLabel(item.compensation_type, item.paid);
       const majors = (item.majors || []).filter(value => value && value !== 'All majors').slice(0, 3);
       return <Link className="card opportunity-card opportunity-row" href={'/opportunities/' + item.id} key={item.id}>
-        <div className="opportunity-row-main"><div className="opportunity-tags">{item.type && item.type !== 'Other' && <span>{item.type}</span>}{compensationLabel && <span>{compensationLabel}</span>}{item.work_mode && <span>{item.work_mode}</span>}</div>
-        <h3>{item.title}</h3><p className="opportunity-org">{item.org || 'Organization not provided'} {item.verified && <span className="verified-badge">✓ Verified</span>}</p></div>
-        <div className="opportunity-row-meta">{majors.length > 0 && <small><strong>Majors</strong> {majors.join(' · ')}</small>}{(item.location || item.work_mode) && !['n/a','not specified'].includes(String(item.location || item.work_mode).trim().toLowerCase()) && <small><strong>Format</strong> {item.location || item.work_mode}</small>}{item.deadline && <strong className={deadlinePassed ? 'deadline-passed' : ''}>{deadlinePassed ? 'Deadline has passed' : 'Deadline ' + new Date(item.deadline + 'T00:00:00').toLocaleDateString()}</strong>}</div>
+        <div className="opportunity-row-main"><div className="opportunity-tags">{item.type && item.type !== 'Other' && <span>{item.type}</span>}{compensationLabel !== 'Not specified' && <span>{compensationLabel}</span>}{item.work_mode && <span>{item.work_mode}</span>}</div>
+        <h3>{item.title}</h3><p className="opportunity-org">{item.org || 'Organization not provided'}</p></div>
+        <div className="opportunity-row-meta">{majors.length > 0 && <small><strong>Majors</strong> {majors.join(' · ')}</small>}{(item.location || item.work_mode) && !['n/a','not specified'].includes(String(item.location || item.work_mode).trim().toLowerCase()) && <small><strong>Format</strong> {item.location || item.work_mode}</small>}<strong className={deadlinePassed ? 'deadline-passed' : ''}>{deadlinePassed ? 'Deadline has passed' : item.deadline ? 'Deadline ' + new Date(item.deadline + 'T00:00:00').toLocaleDateString() : deadlineLabel(item.deadline_type, null, item.posted_date)}</strong></div>
       </Link>;
     })}</div> : <div className="empty-results"><h2>No matching opportunities</h2><p>Clear a filter or choose a broader option.</p></div>}
 

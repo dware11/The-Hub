@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
-const HIDDEN_ROUTES = ['/about', '/admin', '/auth', '/submit', '/panther-submit'];
+const HIDDEN_ROUTES = ['/about', '/admin', '/auth', '/submit', '/panther-submit', '/workspace'];
 
 export default function ConnectDock() {
   const pathname = usePathname();
@@ -48,7 +48,7 @@ export default function ConnectDock() {
         </div>
         <a href="https://www.instagram.com/pvamucode/" target="_blank" rel="noreferrer"><ConnectIcon type="instagram" /><span><strong>Instagram</strong><small>@pvamucode</small></span></a>
         <a href="mailto:code@pvamu.edu"><ConnectIcon type="email" /><span><strong>Email C.O.D.E.</strong><small>code@pvamu.edu</small></span></a>
-        <div className="connect-dock-coming" aria-disabled="true"><ConnectIcon type="linkedin" /><span><strong>LinkedIn</strong><small>Coming soon</small></span></div>
+        <div className="connect-dock-coming" role="note" tabIndex="0" aria-label="C.O.D.E. LinkedIn, coming soon"><ConnectIcon type="linkedin" /><span><strong>LinkedIn</strong><small>Coming soon</small></span></div>
       </div>
       <span className="sr-only" role="status" aria-live="polite">Contact panel {open ? 'expanded' : 'minimized'}.</span>
     </aside>
