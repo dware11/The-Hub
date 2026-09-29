@@ -21,12 +21,30 @@ export async function createIssueReport(input) {
   const contentId = contentType && /^[0-9a-f-]{36}$/i.test(input?.contentId || '') ? input.contentId : null;
   const allowed = contentType ? CONTENT_ISSUE_SET : SITE_ISSUE_SET;
   const issueType = clean(input?.issueType, 80);
-  const description = clean(input?.description, 3000);
+  let description = clean(input?.description, 3000);
   const reporterEmail = clean(input?.reporterEmail, 320).toLowerCase() || null;
   const pageUrl = clean(input?.pageUrl, 2048) || '/';
+  const isOrganizationRequest = issueType === 'Organization addition request';
+  const organizationName = clean(input?.organizationName, 160);
+  const organizationAbbreviation = clean(input?.organizationAbbreviation, 24);
+  const organizationRelationship = clean(input?.organizationRelationship, 160);
+  const organizationEmail = clean(input?.organizationEmail, 320).toLowerCase();
+  const requestDetails = isOrganizationRequest ? {
+    organization_name: organizationName,
+    organization_abbreviation: organizationAbbreviation,
+    organization_relationship: organizationRelationship,
+    organization_email: organizationEmail,
+  } : null;
 
   if (!allowed.has(issueType)) return { ok: false, error: 'Choose a valid issue type.' };
-  if (!description) return { ok: false, error: 'Describe the problem.' };
+  if (isOrganizationRequest) {
+    if (!organizationName) return { ok: false, error: 'Enter the organization’s full name.' };
+    if (!organizationAbbreviation) return { ok: false, error: 'Enter the organization’s abbreviation.' };
+    if (!organizationRelationship) return { ok: false, error: 'Explain your relationship to the organization.' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(organizationEmail)) return { ok: false, error: 'Enter a valid organization email address.' };
+    if (!reporterEmail || !/^[A-Z0-9._%+-]+@pvamu\.edu$/i.test(reporterEmail)) return { ok: false, error: 'Use your @pvamu.edu email address so the Hub team can verify this organization request.' };
+    description ||= `Request to add ${organizationName} (${organizationAbbreviation}).`;
+  } else if (!description) return { ok: false, error: 'Describe the problem.' };
   if (reporterEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reporterEmail)) return { ok: false, error: 'Enter a valid email address or leave it blank.' };
   if (!(pageUrl.startsWith('/') || /^https?:\/\//i.test(pageUrl))) return { ok: false, error: 'The reported page address is invalid.' };
   if (contentType && !contentId) return { ok: false, error: 'The content reference is invalid.' };
@@ -45,6 +63,7 @@ export async function createIssueReport(input) {
     page_url: pageUrl,
     description,
     reporter_email: reporterEmail,
+    request_details: requestDetails,
   });
   if (error) return { ok: false, error: 'The report could not be saved. Please try again.' };
 

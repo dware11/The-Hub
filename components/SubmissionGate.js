@@ -4,7 +4,7 @@ import AccessRequestForm from './AccessRequestForm';
 import PantherSubmitForm from './PantherSubmitForm';
 import { getMyPendingAccessRequest } from '../lib/accessData';
 import { getMySubmissionStatuses } from '../lib/submissionStatus';
-import SubmissionStatusPanel from './SubmissionStatusPanel';
+import SubmissionStatusSummary from './SubmissionStatusSummary';
 
 export default async function SubmissionGate({ target = 'general' }) {
   const viewer = await getViewer();
@@ -17,5 +17,5 @@ export default async function SubmissionGate({ target = 'general' }) {
     return <div className="access-page-shell"><div className="eyebrow">Contributor access</div><h1>You’re signed in, but your account does not have submission access yet.</h1><p>Contributor access allows you to submit information to the Hub for human review. Approval does not grant administrative access.</p><p>Need {label} shared promptly? {contact ? <a href={`mailto:${contact}`}>Email the {label} contact</a> : 'Contact the C.O.D.E. team through the official channel.'}</p><AccessRequestForm viewer={viewer} target={target} existingRequest={pendingRequest} /></div>;
   }
   const submissions = await getMySubmissionStatuses();
-  return <><SubmissionStatusPanel submissions={submissions} /><PantherSubmitForm viewer={viewer} feedbackEnabled={isSuperAdmin(viewer)} initialContentType={target === 'general' ? '' : target} /></>;
+  return <><SubmissionStatusSummary submissions={submissions} /><PantherSubmitForm viewer={viewer} feedbackEnabled={isSuperAdmin(viewer)} initialContentType={target === 'general' ? '' : target} /></>;
 }

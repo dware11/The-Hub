@@ -44,6 +44,7 @@ const expectedOrder = [
   '20260928134549_submission_clarity_and_super_admin_parser_feedback.sql',
   '20260929181148_add_organization_addition_issue_type.sql',
   '20260929200810_repair_submission_status_dashboard.sql',
+  '20260929204959_structure_organization_addition_requests.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -83,6 +84,7 @@ const opportunitySubmissionWorkflow = readMigration('20260924164542_complete_opp
 const applyAsapAvailability = readMigration('20260927234958_add_apply_asap_availability_review.sql');
 const submissionClarity = readMigration('20260928134549_submission_clarity_and_super_admin_parser_feedback.sql');
 const submissionStatusRepair = readMigration('20260929200810_repair_submission_status_dashboard.sql');
+const organizationRequestStructure = readMigration('20260929204959_structure_organization_addition_requests.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -232,5 +234,17 @@ for (const control of [
 ]) assert.ok(submissionStatusRepair.includes(control), `Submission-status repair control missing: ${control}`);
 for (const missingColumn of ['e.updated_at', 'o.updated_at', 'a.updated_at']) assert.ok(!submissionStatusRepair.includes(missingColumn), `Submission-status repair references missing column: ${missingColumn}`);
 assert.doesNotMatch(submissionStatusRepair, /drop\s+table|truncate|delete\s+from|grant\s+all/i, 'Submission-status repair must preserve stored submissions and least privilege');
+for (const control of [
+  'add column if not exists request_details jsonb',
+  'validate_issue_report_request_details()',
+  "set search_path = ''",
+  '@pvamu[.]edu',
+  'organization_name',
+  'organization_abbreviation',
+  'organization_relationship',
+  'organization_email',
+  'revoke all on function public.validate_issue_report_request_details()',
+]) assert.ok(organizationRequestStructure.includes(control), `Organization-request structure control missing: ${control}`);
+assert.doesNotMatch(organizationRequestStructure, /drop\s+table|truncate|delete\s+from|grant\s+all|security\s+definer/i, 'Organization-request structure must preserve data and avoid privileged code');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);

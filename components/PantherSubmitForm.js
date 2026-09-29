@@ -629,7 +629,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
           {isDemoMode && ' This was a demo submission and was not saved.'}
         </p>
         <p className="text-sm text-slate mt-2">You can return to check its status. A reviewer may ask you to correct missing or unclear information.</p>
-        <div className="submission-success-actions"><button type="button" className="outline-button" onClick={() => { router.refresh(); document.getElementById('submission-status')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>View submission status</button><a href="/panther-submit" className="gold-button">Submit another</a></div>
+        <div className="submission-success-actions"><a href="/panther-submit/submissions" className="outline-button">View submission status</a><a href="/panther-submit" className="gold-button">Submit another</a></div>
         {feedbackEnabled && <form onSubmit={saveFeedback} className="parser-feedback mt-6 border-t border-line pt-5">
           <h2 className="font-display text-lg text-purple-900">Optional: parser quality feedback</h2>
           <p className="text-xs text-slate mt-1">Super Admin feedback helps us improve extraction. Note what the parser handled well, what it missed, or what required manual correction. This does not change your completed submission.</p>
@@ -693,7 +693,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
                 {RELATIONSHIPS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
               </select>
             </label>
-            {relationship && <RelationshipFields relationship={relationship} referral={referral} updateReferral={updateReferral} />}
+            {relationship && <RelationshipFields relationship={relationship} referral={referral} updateReferral={updateReferral} reporterEmail={viewer.user?.email || ''} />}
           </section>
 
           {contentType !== 'announcement' && <>
@@ -864,11 +864,11 @@ function OrganizationSelect({ choice, setChoice, value, onChange }) {
   </div>;
 }
 
-function RelationshipFields({ relationship, referral, updateReferral }) {
+function RelationshipFields({ relationship, referral, updateReferral, reporterEmail = '' }) {
   if (relationship === 'student_organization') return <div className="grid md:grid-cols-2 gap-4 mt-4">
     <label><span className="text-sm font-medium block mb-1.5">Registered student organization <span className="text-coral">*</span></span><select className="input" required value={referral.organization} onChange={(event) => updateReferral('organization', event.target.value)}><option value="">Choose an organization</option>{REGISTERED_EVENT_ORGANIZATIONS.map((organization) => <option key={organization.value} value={organization.label}>{organization.label}</option>)}</select></label>
     <Input label="Your role" required value={referral.title} onChange={(value) => updateReferral('title', value)} placeholder="President, officer, member, adviser" />
-    <div className="md:col-span-2"><ReportIssueForm label="Report / request an organization addition" defaultIssueType="Organization addition request" /></div>
+    <div className="md:col-span-2"><ReportIssueForm label="Report / request an organization addition" defaultIssueType="Organization addition request" defaultReporterEmail={reporterEmail} /></div>
   </div>;
   if (relationship === 'faculty_staff' || relationship === 'department_college') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label={relationship === 'faculty_staff' ? 'Department / office' : 'Department / college'} required value={referral.organization} onChange={(value) => updateReferral('organization', value)} /><Input label="Position or role" required value={referral.title} onChange={(value) => updateReferral('title', value)} /></div>;
   if (relationship === 'alumni') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label="Graduation year (optional)" value={referral.graduationYear} onChange={(value) => updateReferral('graduationYear', value)} /><Input label="Current organization / company (optional)" value={referral.organization} onChange={(value) => updateReferral('organization', value)} /></div>;
