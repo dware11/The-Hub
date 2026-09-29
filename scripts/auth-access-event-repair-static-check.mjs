@@ -7,6 +7,9 @@ const gate = read('components/SubmissionGate.js');
 const access = read('components/AccessRequestForm.js');
 const accessAction = read('app/access/actions.js');
 const accessData = read('lib/accessData.js');
+const committeeData = read('lib/committeeData.js');
+const committeePage = read('app/admin/committee/page.js');
+const committeeQueue = read('app/admin/committee/CommitteeQueue.js');
 const nav = read('components/Nav.js');
 const desktopNav = read('components/DesktopNavMenus.js');
 const profile = read('components/WorkspaceIdentityForm.js');
@@ -42,6 +45,9 @@ assert.match(accessData, /\.eq\('auth_user_id', authUserId\)/);
 assert.match(accessData, /\.eq\('status', 'pending'\)/);
 assert.match(accessAction, /request_contributor_access/);
 assert.match(rbac, /role in \('contributor','reviewer','admin'\)/);
+assert.match(committeeData, /getPendingAccessRequests[\s\S]*\.eq\('status','pending'\)/);
+assert.match(committeePage, /getPendingAccessRequests\(\)/);
+assert.match(committeeQueue, /requests\.filter\(request=>request\.status==='pending'\)/);
 
 // Event submission: required host, optional contact/location, acknowledgment, evidence, lifecycle.
 assert.match(validation, /org: text\(input\.org, 'Organization or source', \{ required: true/);
