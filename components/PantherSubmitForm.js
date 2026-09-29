@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient, isDemoMode } from '../lib/supabaseClient';
 import { extractSubmission, toSubmissionParserResult } from '../lib/submissionExtraction';
 import { abandonIntakeAction, beginIntakeAction, finalizeIntakeAction, saveParserFeedbackAction } from '../app/panther-submit/actions';
@@ -176,6 +177,7 @@ const FEEDBACK_ISSUES = [
 ];
 
 export default function PantherSubmitForm({ viewer, feedbackEnabled = true, initialContentType = '' }) {
+  const router = useRouter();
   const [step, setStep] = useState(initialContentType ? 2 : 1);
   const [contentType, setContentType] = useState(initialContentType);
   const [relationship, setRelationship] = useState('');
@@ -600,6 +602,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
       setPreparedIntake(null);
       setStep(6);
       setSubmitted(true);
+      router.refresh();
     } catch (reason) {
       setError(reason.message || 'The submission could not be completed.');
     } finally {
@@ -626,7 +629,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
           {isDemoMode && ' This was a demo submission and was not saved.'}
         </p>
         <p className="text-sm text-slate mt-2">You can return to check its status. A reviewer may ask you to correct missing or unclear information.</p>
-        <div className="submission-success-actions"><a href="/panther-submit#submission-status" className="outline-button">View submission status</a><a href="/panther-submit" className="gold-button">Submit another</a></div>
+        <div className="submission-success-actions"><button type="button" className="outline-button" onClick={() => { router.refresh(); document.getElementById('submission-status')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>View submission status</button><a href="/panther-submit" className="gold-button">Submit another</a></div>
         {feedbackEnabled && <form onSubmit={saveFeedback} className="parser-feedback mt-6 border-t border-line pt-5">
           <h2 className="font-display text-lg text-purple-900">Optional: parser quality feedback</h2>
           <p className="text-xs text-slate mt-1">Super Admin feedback helps us improve extraction. Note what the parser handled well, what it missed, or what required manual correction. This does not change your completed submission.</p>
@@ -636,7 +639,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
           <fieldset className="mt-4"><legend className="text-sm font-medium">What needed attention? <span className="text-slate font-normal">(choose any)</span></legend><div className="flex flex-wrap gap-2 mt-2">
             {FEEDBACK_ISSUES.map(([value, label]) => <label key={value} className="chip"><input type="checkbox" checked={feedback.issueFields.includes(value)} onChange={() => toggleFeedbackIssue(value)} /> {label}</label>)}
           </div></fieldset>
-          <label className="block mt-4"><span className="text-sm font-medium">What it handled well / where it struggled <span className="text-slate font-normal">(optional, 500 characters)</span></span><textarea className="input mt-2" rows={3} maxLength={500} value={feedback.note} onChange={(event) => setFeedback((current) => ({ ...current, note: event.target.value }))} placeholder="Describe strengths or gaps without pasting private source text." /></label>
+          <label className="parser-feedback-note"><span>What it handled well / where it struggled <small>(optional, 500 characters)</small></span><textarea rows={5} maxLength={500} value={feedback.note} onChange={(event) => setFeedback((current) => ({ ...current, note: event.target.value }))} placeholder="Describe what worked, what was missed, or what needed correction. Do not paste private source text." /></label>
           <button className="gold-button mt-4" type="submit" disabled={!feedback.rating || feedbackSaving}>{feedbackSaving ? 'Saving…' : 'Send optional feedback'}</button>
           {feedbackStatus && <p className="text-xs text-slate mt-3" role="status" aria-live="polite">{feedbackStatus}</p>}
         </form>}

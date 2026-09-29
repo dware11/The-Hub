@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { dismissRejectedSubmissionAction, resubmitCorrectionAction } from '../app/panther-submit/statusActions';
 import { DEADLINE_TYPES, OPPORTUNITY_COMPENSATION_TYPES } from '../lib/opportunityOptions';
 
@@ -20,6 +20,7 @@ function fieldInput(field, label, values, updateValue) {
 }
 export default function SubmissionStatusPanel({ submissions = [] }) {
   const [items, setItems] = useState(submissions); const [editing, setEditing] = useState(null); const [values, setValues] = useState({}); const [message, setMessage] = useState(''); const [busy, startTransition] = useTransition();
+  useEffect(() => { setItems(submissions); }, [submissions]);
   function beginEdit(item) { setEditing(item.content_id); setValues(item.editable || {}); setMessage(''); }
   function updateValue(field, value) { setValues((current) => ({ ...current, [field]: value, ...(field === 'deadline_type' && value !== 'specific_date' ? { deadline: '' } : {}) })); }
   function resubmit(item) { setMessage('Saving your corrections…'); startTransition(async () => { const result = await resubmitCorrectionAction({ contentType: item.content_type, contentId: item.content_id, values }); if (result.ok) { setItems((current) => current.map((candidate) => candidate.content_id === item.content_id ? { ...candidate, status: 'resubmitted', editable: values, reviewer_note: null } : candidate)); setEditing(null); setMessage('Your corrections were resubmitted for review.'); } else setMessage(result.error || 'Your corrections could not be resubmitted.'); }); }

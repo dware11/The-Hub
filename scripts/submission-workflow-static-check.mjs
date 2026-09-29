@@ -20,6 +20,9 @@ const validation = read('lib/validation.js');
 const migrationName = fs.readdirSync(path.join(root, 'supabase/migrations')).find((name) => name.endsWith('_submission_status_dashboard.sql'));
 assert.ok(migrationName, 'submission status migration is missing');
 const migration = read(`supabase/migrations/${migrationName}`);
+const repairMigrationName = fs.readdirSync(path.join(root, 'supabase/migrations')).find((name) => name.endsWith('_repair_submission_status_dashboard.sql'));
+assert.ok(repairMigrationName, 'submission status repair migration is missing');
+const repairMigration = read(`supabase/migrations/${repairMigrationName}`);
 
 for (const type of ['Event','Opportunity','Announcement']) assert.ok(form.includes(type), `${type} submission option is missing`);
 for (const step of ['Type','Source','Details','People','Review','Submit']) assert.ok(form.includes(`'${step}'`), `six-step progress is missing ${step}`);
@@ -31,6 +34,8 @@ assert.ok(form.includes('REGISTERED_EVENT_ORGANIZATIONS') && eventCategories.inc
 assert.ok(form.includes('Please enter the details below.'), 'safe manual completion message is missing');
 assert.ok(form.includes('Final review') && form.includes('Submit for review'), 'final review step is missing');
 assert.ok(form.includes('Submitted for review') && form.includes('View submission status'), 'success state links are missing');
+assert.ok(form.includes('router.refresh()') && status.includes('useEffect(() => { setItems(submissions); }, [submissions])'), 'completed submissions do not refresh the saved-status dashboard');
+assert.ok(form.includes('parser-feedback-note') && css.includes('.parser-feedback-note textarea') && css.includes('min-height:132px'), 'parser feedback note is not presented as a full-width readable field');
 for (const label of ['Specific application deadline', 'Deadline not provided / Apply ASAP', 'Full-Time']) assert.ok(form.includes(label) || opportunityOptions.includes(label), `opportunity workflow option missing: ${label}`);
 assert.ok(form.includes('Original posting date (optional)') && validation.includes('posted_date'), 'Apply ASAP posting-date support is incomplete');
 assert.ok(form.includes('No public opportunity contact available') && !validation.includes("email(input.contact_email, 'Contact email', type === 'opportunity')"), 'optional public opportunity contact is incomplete');
@@ -55,5 +60,8 @@ for (const label of ['Pending Review','Needs Correction','Resubmitted','Publishe
 assert.ok(status.includes('Edit &amp; Resubmit') && statusActions.includes('resubmit_corrected_content'), 'correction/resubmission flow is incomplete');
 assert.ok(status.includes('Dismiss from dashboard') && migration.includes('submission_dashboard_dismissals'), 'safe rejection dismissal is incomplete');
 assert.ok(migration.includes('review_verification_evidence') && migration.includes('reviewer_note'), 'reviewer note is not safely exposed to the submitter status RPC');
+for (const missingColumn of ['e.updated_at', 'o.updated_at', 'a.updated_at']) assert.ok(!repairMigration.includes(missingColumn), `status repair still queries missing column: ${missingColumn}`);
+assert.ok(repairMigration.includes("'updated_at',s.created_at"), 'status repair does not provide a stable display timestamp');
+assert.ok(repairMigration.includes('auth.uid()') && repairMigration.includes('identity_roles'), 'status repair does not bind submission history to the authenticated identity');
 assert.ok(css.includes('@media(max-width:430px)') && css.includes('.submission-final-actions') && css.includes('flex-wrap:wrap'), 'submission action reflow coverage is missing');
 console.log('Submission workflow static checks passed.');

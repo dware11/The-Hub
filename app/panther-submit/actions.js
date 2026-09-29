@@ -524,6 +524,7 @@ export async function finalizeIntakeAction(input) {
 
   void notifyOperationalEvent('new submission awaiting review');
   revalidatePath('/admin/review');
+  revalidatePath('/panther-submit');
   return { ok: true, data: content };
 }
 

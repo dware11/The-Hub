@@ -43,6 +43,7 @@ const expectedOrder = [
   '20260927234958_add_apply_asap_availability_review.sql',
   '20260928134549_submission_clarity_and_super_admin_parser_feedback.sql',
   '20260929181148_add_organization_addition_issue_type.sql',
+  '20260929200810_repair_submission_status_dashboard.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -81,6 +82,7 @@ const roleManagementRepair = readMigration('20260923142441_repair_manage_user_ro
 const opportunitySubmissionWorkflow = readMigration('20260924164542_complete_opportunity_submission_workflow.sql');
 const applyAsapAvailability = readMigration('20260927234958_add_apply_asap_availability_review.sql');
 const submissionClarity = readMigration('20260928134549_submission_clarity_and_super_admin_parser_feedback.sql');
+const submissionStatusRepair = readMigration('20260929200810_repair_submission_status_dashboard.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -221,5 +223,14 @@ for (const control of [
 assert.doesNotMatch(applyAsapAvailability, /alter\s+table\s+public\.opportunities|drop\s+table|truncate|grant\s+all/i, 'Availability maintenance must remain private and additive');
 for (const control of ['add column if not exists posted_date date', 'super admins read parser feedback', "role = 'super_admin'", 'get_my_submission_status']) assert.ok(submissionClarity.includes(control), `Submission clarity control missing: ${control}`);
 assert.doesNotMatch(submissionClarity, /drop\s+table|truncate|delete\s+from|grant\s+all/i, 'Submission clarity migration must preserve data and least privilege');
+for (const control of [
+  'create or replace function public.get_my_submission_status()',
+  "set search_path = ''",
+  'identity_roles',
+  "'updated_at',s.created_at",
+  'grant execute on function public.get_my_submission_status() to authenticated',
+]) assert.ok(submissionStatusRepair.includes(control), `Submission-status repair control missing: ${control}`);
+for (const missingColumn of ['e.updated_at', 'o.updated_at', 'a.updated_at']) assert.ok(!submissionStatusRepair.includes(missingColumn), `Submission-status repair references missing column: ${missingColumn}`);
+assert.doesNotMatch(submissionStatusRepair, /drop\s+table|truncate|delete\s+from|grant\s+all/i, 'Submission-status repair must preserve stored submissions and least privilege');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);
