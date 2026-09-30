@@ -384,6 +384,14 @@ html{scroll-behavior:smooth}.code-about-page{--about-cream:#f7f3e9;--about-purpl
 @media(max-width:900px){.content-manager-controls{grid-template-columns:1fr 1fr}.content-manager-controls label:first-child{grid-column:1/-1}.content-row{align-items:stretch;flex-direction:column}.content-row-actions{width:100%;justify-content:flex-start}}
 .events-week-spans{grid-auto-rows:var(--range-lane-height,20px);gap:var(--range-lane-gap,4px) 0}.content-record{display:grid;gap:8px}.content-record>.content-edit-drawer.is-embedded{margin:0;padding:0;background:transparent}.content-edit-drawer.is-embedded .content-audit-list{margin-top:0}.content-order-control select{min-height:34px;padding:5px;border:1px solid var(--line);border-radius:4px;background:#fff}.content-row-actions>.outline-button{min-height:38px;padding:8px 11px}
 @media(max-width:560px){.content-manager-controls{grid-template-columns:1fr}.content-manager-controls label:first-child{grid-column:auto}}
+.content-row-actions{display:grid;grid-template-columns:minmax(0,auto);justify-items:end;gap:8px;width:min(100%,720px);padding:0;border:0;background:transparent}
+.content-action-group{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;max-width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fbfaf8}
+.content-placement-actions{border-left:3px solid var(--gold);background:#fffdf7}
+.content-lifecycle-actions{background:#fff}
+.content-order-control{display:flex;align-items:center;gap:7px;min-width:0;padding:0 0 0 8px;border:0;border-left:1px solid var(--line);border-radius:0;background:transparent!important}
+.content-order-control select{width:auto;min-width:104px}
+@media(max-width:900px){.content-row-actions{justify-items:stretch}.content-action-group{justify-content:flex-start}}
+@media(max-width:560px){.content-action-group{display:grid;grid-template-columns:1fr}.content-action-group>*{width:100%;justify-content:center}.content-order-control{display:grid;grid-template-columns:auto minmax(0,1fr);padding:7px 0 0;border-left:0;border-top:1px solid var(--line)}.content-order-control select{width:100%}}
 .review-self-notice,
 .content-lifecycle-note {
   display: inline-flex;

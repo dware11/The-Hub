@@ -45,6 +45,7 @@ const expectedOrder = [
   '20260929181148_add_organization_addition_issue_type.sql',
   '20260929200810_repair_submission_status_dashboard.sql',
   '20260929204959_structure_organization_addition_requests.sql',
+  '20260929212940_homepage_announcement_highlight_control.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -85,6 +86,7 @@ const applyAsapAvailability = readMigration('20260927234958_add_apply_asap_avail
 const submissionClarity = readMigration('20260928134549_submission_clarity_and_super_admin_parser_feedback.sql');
 const submissionStatusRepair = readMigration('20260929200810_repair_submission_status_dashboard.sql');
 const organizationRequestStructure = readMigration('20260929204959_structure_organization_addition_requests.sql');
+const homepageAnnouncementHighlight = readMigration('20260929212940_homepage_announcement_highlight_control.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -223,6 +225,14 @@ for (const control of [
   'revoke all on table public.opportunity_availability_reviews from public, anon',
 ]) assert.ok(applyAsapAvailability.includes(control), `Apply ASAP availability control missing: ${control}`);
 assert.doesNotMatch(applyAsapAvailability, /alter\s+table\s+public\.opportunities|drop\s+table|truncate|grant\s+all/i, 'Availability maintenance must remain private and additive');
+for (const control of [
+  'manage_home_announcement',
+  "role in ('admin', 'super_admin')",
+  'Only published announcements can be highlighted on the homepage',
+  'revoke all on function public.manage_home_announcement(uuid, boolean) from public, anon',
+  'grant execute on function public.manage_home_announcement(uuid, boolean) to authenticated',
+]) assert.ok(homepageAnnouncementHighlight.includes(control), `Homepage announcement highlight control missing: ${control}`);
+assert.doesNotMatch(homepageAnnouncementHighlight, /grant\s+all|service_role|delete\s+from|truncate/i, 'Homepage announcement highlighting must remain scoped and non-destructive');
 for (const control of ['add column if not exists posted_date date', 'super admins read parser feedback', "role = 'super_admin'", 'get_my_submission_status']) assert.ok(submissionClarity.includes(control), `Submission clarity control missing: ${control}`);
 assert.doesNotMatch(submissionClarity, /drop\s+table|truncate|delete\s+from|grant\s+all/i, 'Submission clarity migration must preserve data and least privilege');
 for (const control of [

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { confirmOpportunityAvailability, hardDeleteContent, manageContent, setHomeSpotlight } from './actions';
+import { confirmOpportunityAvailability, hardDeleteContent, manageContent, setHomeAnnouncement, setHomeSpotlight } from './actions';
 import ContentEditForms from './ContentEditForms';
 import { deadlineLabel } from '../../../lib/opportunityOptions';
 
@@ -107,6 +107,19 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
   }
 
   async function saveSpotlightRank(row, rank) { const result=await setHomeSpotlight(row.content_type,row.id,true,rank); setMessage(result.ok?'Spotlight position saved.':result.error||'Position could not be saved.'); if(result.ok)setItems(current=>current.map(item=>item.id===row.id&&item.content_type===row.content_type?{...item,spotlight_rank:Number(rank)}:item)); }
+  async function highlightAnnouncement(row) {
+    const next = !row.pinned;
+    if (next && items.filter(item => item.content_type === 'announcement' && item.status === 'published' && item.pinned).length >= 7) {
+      setMessage('The homepage announcement area already has 7 highlighted items. Remove one before highlighting another.');
+      return;
+    }
+    setMessage(`${next ? 'Highlighting' : 'Removing'} ${row.title}${next ? ' on' : ' from'} the homepage…`);
+    const result = await setHomeAnnouncement(row.id, next);
+    if (!result.ok) { setMessage(result.error || 'Homepage announcement update failed.'); return; }
+    setItems(current => current.map(item => item.id === row.id && item.content_type === 'announcement' ? { ...item, pinned: next } : item));
+    setMessage(next ? 'Announcement highlighted in Latest Announcements.' : 'Announcement returned to normal homepage ordering.');
+    if (!result.demo) router.refresh();
+  }
   async function confirmAvailability(row){setMessage(`Confirming ${row.title} is still active…`);const result=await confirmOpportunityAvailability(row.id);if(!result.ok){setMessage(result.error||'Availability could not be confirmed.');return;}const review=result.data||{last_verified_at:result.last_verified_at,next_review_at:result.next_review_at};setItems(current=>current.map(item=>item.id===row.id&&item.content_type==='opportunity'?{...item,availability_review:review}:item));setMessage('Availability confirmed. The next review is scheduled in approximately 30 days.');if(!result.demo)router.refresh();}
   async function confirmHardDelete(){if(!deleteTarget)return;const result=await hardDeleteContent(deleteTarget.content_type,deleteTarget.id,deleteReason);if(!result.ok){setMessage(result.error||'Permanent deletion failed.');return;}setItems(current=>current.filter(item=>!(item.id===deleteTarget.id&&item.content_type===deleteTarget.content_type)));setMessage('Content permanently deleted and audited.');setDeleteTarget(null);setDeleteReason('');if(!result.demo)router.refresh();}
   async function confirmAction(){if(!actionTarget)return;await act(actionTarget.row,actionTarget.action);setActionTarget(null);}
@@ -126,21 +139,28 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
     <div className="content-tabs" role="tablist" aria-label="Content type">{tabs.map(([value, label]) => <button type="button" role="tab" key={value} aria-selected={tab === value} className={tab === value ? 'active' : ''} onClick={() => setTab(value)}>{label} <span>{value === 'all' ? items.length : value === 'spotlight' ? items.filter(item => item.is_featured).length : value === 'availability' ? items.filter(item=>item.content_type==='opportunity'&&item.status==='published'&&item.deadline_type==='rolling'&&(!item.availability_review?.next_review_at||item.availability_review.next_review_at<=new Date().toISOString().slice(0,10))).length : items.filter(item => item.content_type === value).length}</span></button>)}</div>
     <p className="workspace-status" role="status" aria-live="polite">{message || `${filtered.length} records shown.`}</p>
     {filtered.length ? <div className="content-table" role="region" aria-label="Managed content records">{filtered.map(row => <div className="content-record" key={`${row.content_type}-${row.id}`}><article className="content-row">
-      <div><div className="eyebrow">{row.content_type} · {statusLabel(row.status)}{row.is_featured ? ' · Home Spotlight' : ''}</div><h2>{row.title}</h2><p>{row.org || row.source || 'Organization not provided'}</p><small>{row.content_type === 'opportunity' ? (row.deadline ? `Deadline ${new Date(row.deadline + 'T12:00:00').toLocaleDateString()}` : deadlineLabel(row.deadline_type, null, row.posted_date)) : row.date ? `Event ${new Date(row.date + 'T12:00:00').toLocaleDateString()}` : 'No date recorded'}</small>{row.submitted_by_user && <small className="content-lifecycle-meta">Submitted by {row.submitted_by_user.full_name || row.submitted_by_user.email || 'Unknown submitter'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'Submission time unavailable'}</small>}</div>
+      <div><div className="eyebrow">{row.content_type} · {statusLabel(row.status)}{row.is_featured ? ' · Home Spotlight' : ''}{row.content_type === 'announcement' && row.pinned ? ' · Homepage highlight' : ''}</div><h2>{row.title}</h2><p>{row.org || row.source || 'Organization not provided'}</p><small>{row.content_type === 'opportunity' ? (row.deadline ? `Deadline ${new Date(row.deadline + 'T12:00:00').toLocaleDateString()}` : deadlineLabel(row.deadline_type, null, row.posted_date)) : row.date ? `Event ${new Date(row.date + 'T12:00:00').toLocaleDateString()}` : 'No date recorded'}</small>{row.submitted_by_user && <small className="content-lifecycle-meta">Submitted by {row.submitted_by_user.full_name || row.submitted_by_user.email || 'Unknown submitter'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'Submission time unavailable'}</small>}</div>
       <div className="content-row-actions">
-        {row.status === 'published' && <Link className="chip" href={contentHref(row)}>View</Link>}
-        {['pending', 'resubmitted'].includes(row.status) && <Link className="gold-button" href="/admin/review">Open in Review Queue</Link>}
-        {row.status === 'needs_correction' && <span className="content-lifecycle-note">Waiting for contributor correction</span>}
-        {row.status === 'rejected' && <span className="content-lifecycle-note">Review closed · history preserved</span>}
-        {superAdmin && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling' && <><a className="chip" href={row.link} target="_blank" rel="noreferrer">Open application link</a><button className="gold-button" onClick={()=>confirmAvailability(row)}>Confirm still active</button><button className="chip" onClick={()=>setActionTarget({row,action:'archive'})}>Mark closed / archive</button></>}
-        {EDITABLE_STATUSES.has(row.status) && <button className="outline-button" aria-expanded={editorTarget === `${row.content_type}:${row.id}`} onClick={() => setEditorTarget(current => current === `${row.content_type}:${row.id}` ? null : `${row.content_type}:${row.id}`)}>{editorTarget === `${row.content_type}:${row.id}` ? 'Close full edit form' : 'Open full edit form'}</button>}
-        {row.status === 'published' && <button className={row.is_featured ? 'gold-button' : 'chip'} onClick={() => spotlight(row)}>{row.is_featured ? 'Remove from Spotlight' : 'Add to Spotlight'}</button>}
-        {row.status === 'published' && row.is_featured && <label className="content-order-control"><span>Spotlight slot</span><select aria-label={`Spotlight slot for ${row.title}`} value={Math.min(3, Math.max(1, Number(row.spotlight_rank) || 1))} onChange={event=>saveSpotlightRank(row,event.target.value)}><option value="1">Slot 1</option><option value="2">Slot 2</option><option value="3">Slot 3</option></select></label>}
-        {row.status === 'published' && <button className="chip" onClick={() => setActionTarget({ row, action: 'unpublish' })}>Unpublish</button>}
-        {['published', 'unpublished'].includes(row.status) && !(superAdmin && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling') && <button className="chip" onClick={() => setActionTarget({ row, action: 'archive' })}>Archive</button>}
-        {EDITABLE_STATUSES.has(row.status) && <button className="chip" onClick={() => setActionTarget({ row, action: 'soft_delete' })}>Soft-delete</button>}
-        {row.status === 'deleted' && <button className="gold-button" onClick={() => act(row, 'restore')}>Restore</button>}
-        {superAdmin && row.status === 'deleted' && <button className="danger-button" onClick={()=>setDeleteTarget(row)}>Delete permanently</button>}
+        <div className="content-action-group" role="group" aria-label="Open and edit">
+          {row.status === 'published' && <Link className="chip" href={contentHref(row)}>View</Link>}
+          {['pending', 'resubmitted'].includes(row.status) && <Link className="gold-button" href="/admin/review">Open in Review Queue</Link>}
+          {row.status === 'needs_correction' && <span className="content-lifecycle-note">Waiting for contributor correction</span>}
+          {row.status === 'rejected' && <span className="content-lifecycle-note">Review closed · history preserved</span>}
+          {EDITABLE_STATUSES.has(row.status) && <button className="outline-button" aria-expanded={editorTarget === `${row.content_type}:${row.id}`} onClick={() => setEditorTarget(current => current === `${row.content_type}:${row.id}` ? null : `${row.content_type}:${row.id}`)}>{editorTarget === `${row.content_type}:${row.id}` ? 'Close full edit form' : 'Open full edit form'}</button>}
+        </div>
+        {row.status === 'published' && <div className="content-action-group content-placement-actions" role="group" aria-label="Homepage placement">
+          <button className={row.is_featured ? 'gold-button' : 'chip'} onClick={() => spotlight(row)}>{row.is_featured ? 'Remove from Spotlight' : 'Add to Spotlight'}</button>
+          {row.is_featured && <label className="content-order-control"><span>Position</span><select aria-label={`Spotlight position for ${row.title}`} value={Math.min(3, Math.max(1, Number(row.spotlight_rank) || 1))} onChange={event=>saveSpotlightRank(row,event.target.value)}><option value="1">1 · First</option><option value="2">2 · Second</option><option value="3">3 · Third</option></select></label>}
+          {row.content_type === 'announcement' && <button className={row.pinned ? 'gold-button' : 'chip'} onClick={() => highlightAnnouncement(row)}>{row.pinned ? 'Remove homepage highlight' : 'Highlight in Latest Announcements'}</button>}
+        </div>}
+        <div className="content-action-group content-lifecycle-actions" role="group" aria-label="Content status actions">
+          {superAdmin && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling' && <><a className="chip" href={row.link} target="_blank" rel="noreferrer">Open application link</a><button className="gold-button" onClick={()=>confirmAvailability(row)}>Confirm still active</button><button className="chip" onClick={()=>setActionTarget({row,action:'archive'})}>Mark closed / archive</button></>}
+          {row.status === 'published' && <button className="chip" onClick={() => setActionTarget({ row, action: 'unpublish' })}>Unpublish</button>}
+          {['published', 'unpublished'].includes(row.status) && !(superAdmin && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling') && <button className="chip" onClick={() => setActionTarget({ row, action: 'archive' })}>Archive</button>}
+          {EDITABLE_STATUSES.has(row.status) && <button className="chip" onClick={() => setActionTarget({ row, action: 'soft_delete' })}>Move to trash</button>}
+          {row.status === 'deleted' && <button className="gold-button" onClick={() => act(row, 'restore')}>Restore</button>}
+          {superAdmin && row.status === 'deleted' && <button className="danger-button" onClick={()=>setDeleteTarget(row)}>Delete permanently</button>}
+        </div>
       </div>
     </article>{editorTarget === `${row.content_type}:${row.id}` && <ContentEditForms rows={[row]} auditEdits={auditEdits} embedded startOpen />}</div>)}</div> : <div className="workspace-empty">No content matches these filters.</div>}
     {deleteTarget&&<dialog open className="history-dialog" aria-labelledby="hard-delete-title"><div className="history-dialog-card"><button type="button" className="history-dialog-close" aria-label="Cancel permanent deletion" onClick={()=>setDeleteTarget(null)}>×</button><div className="eyebrow">Super Admin only</div><h2 id="hard-delete-title">Permanently delete this record?</h2><p><strong>{deleteTarget.title}</strong> cannot be restored. The audit event and deletion reason will remain.</p><label className="hard-delete-reason"><span>Required reason</span><textarea rows="4" minLength="10" value={deleteReason} onChange={event=>setDeleteReason(event.target.value)}/></label><div className="history-dialog-actions"><button className="chip" onClick={()=>setDeleteTarget(null)}>Cancel</button><button className="danger-button" disabled={deleteReason.trim().length<10} onClick={confirmHardDelete}>Delete permanently</button></div></div></dialog>}

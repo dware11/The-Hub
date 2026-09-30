@@ -28,6 +28,25 @@ export async function setHomeSpotlight(type,id,isFeatured,rank=1){
   return{ok:true,data};
 }
 
+export async function setHomeAnnouncement(id, highlighted) {
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) return { ok: false, error: 'Administrator access required' };
+  if (isDemoMode) {
+    revalidatePath('/admin/content');
+    revalidatePath('/');
+    return { ok: true, demo: true };
+  }
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('manage_home_announcement', {
+    p_announcement_id: id,
+    p_highlighted: Boolean(highlighted),
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/admin/content');
+  revalidatePath('/');
+  return { ok: true, data };
+}
+
 export async function setHomeEvent(id,visible,rank=99){const viewer=await getViewer();if(!isAdmin(viewer))return{ok:false,error:'Administrator access required'};if(isDemoMode){revalidatePath('/admin/content');revalidatePath('/');return{ok:true,demo:true};}const supabase=await createServerSupabaseClient();const{data,error}=await supabase.rpc('manage_home_event',{p_event_id:id,p_visible:Boolean(visible),p_rank:visible?Math.max(1,Math.min(99,Number(rank)||99)):null});if(error)return{ok:false,error:error.message};revalidatePath('/admin/content');revalidatePath('/');return{ok:true,data};}
 
 export async function hardDeleteContent(type,id,reason){const viewer=await getViewer();if(!isSuperAdmin(viewer))return{ok:false,error:'Super Admin access required'};const cleaned=String(reason||'').trim();if(cleaned.length<10)return{ok:false,error:'Enter a deletion reason of at least 10 characters.'};if(isDemoMode)return{ok:true,demo:true};const supabase=await createServerSupabaseClient();const{data,error}=await supabase.rpc('hard_delete_content',{p_content_type:type,p_content_id:id,p_reason:cleaned});if(error)return{ok:false,error:error.message};['/admin/content','/admin/history','/','/opportunities','/events','/events/all','/announcements'].forEach(revalidatePath);return{ok:true,data};}
