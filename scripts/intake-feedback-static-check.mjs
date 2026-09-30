@@ -37,6 +37,8 @@ for (const table of ['intake_sessions', 'source_artifacts', 'field_suggestions',
 assert.doesNotMatch(parserData, /source_text/);
 assert.match(systemInsights, /<ParserActivityPanel activities=\{parserActivity\}/);
 for (const copy of ['View parser activity', 'Recent extraction attempts', 'Extraction failed', 'Incomplete workflow', 'No parser feedback was submitted']) assert.ok(parserActivityPanel.includes(copy), `System Insights parser review is missing: ${copy}`);
+for (const copy of ['Pasted Text', 'Program PDF', 'Screenshot', 'Clear Filters']) assert.ok(parserActivityPanel.includes(copy), `Parser activity needs a human-readable control: ${copy}`);
+assert.match(parserActivityPanel, /function clearFilters\(\)/);
 for (const filter of ['Outcome', 'Content', 'Source', 'Feedback']) assert.ok(parserActivityPanel.includes(`<span>${filter}</span>`), `Parser activity filter is missing: ${filter}`);
 assert.match(submitForm, /Your submission is still complete/);
 assert.match(submitForm, /if \(!artifacts\.length && !pastedText\.trim\(\)\)[\s\S]{0,180}setStep\(3\)/);

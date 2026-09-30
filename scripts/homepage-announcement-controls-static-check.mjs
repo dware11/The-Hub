@@ -13,6 +13,8 @@ assert.match(manager, /Remove homepage highlight/);
 assert.match(manager, /content-action-group content-placement-actions/);
 assert.match(manager, /content-action-group content-lifecycle-actions/);
 assert.match(manager, /1 · First/);
+assert.match(manager, /Apply ASAP Checks/);
+assert.match(manager, /due for a 30-day availability check/);
 assert.match(actions, /manage_home_announcement/);
 assert.match(home, /Boolean\(b\.pinned\).*Boolean\(a\.pinned\)/);
 assert.match(css, /\.content-action-group\{/);
