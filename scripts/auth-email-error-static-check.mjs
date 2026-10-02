@@ -7,16 +7,19 @@ const errors = read('lib/authErrors.js');
 const signIn = read('components/EmailSignInForm.js');
 
 assert.match(errors, /getAuthEmailErrorMessage/);
+assert.match(errors, /getAuthOtpErrorMessage/);
 assert.match(errors, /details\.status === 429/);
-assert.match(errors, /Too many sign-in links were requested\. Please wait a little before requesting another link\. If you recently requested one, check your inbox first/);
-assert.match(errors, /A sign-in link was recently sent/);
+assert.match(errors, /Too many sign-in codes were requested\. Please wait before requesting another/);
+assert.match(errors, /A sign-in code was recently sent/);
 assert.match(errors, /Enter a valid email address/);
-assert.match(errors, /couldn't send the sign-in email/);
+assert.match(errors, /couldn't send the sign-in code/);
 assert.match(errors, /requestMs/);
 assert.match(errors, /redacted-email/);
 assert.match(errors, /NODE_ENV === 'production'/);
 assert.match(signIn, /try \{/);
 assert.match(signIn, /logAuthEmailError\(error, requestMs\)/);
+assert.match(signIn, /logAuthOtpError\(error,requestMs\)/);
+assert.match(signIn, /verifyOtp\(\{email,token,type:'email'\}\)/);
 assert.match(signIn, /finally \{/);
 assert.doesNotMatch(signIn, /verify address and try again/);
 

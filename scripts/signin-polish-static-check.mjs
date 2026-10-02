@@ -12,12 +12,12 @@ const errors = read('lib/authErrors.js');
 
 const checks = [
   [page.includes('auth-page-shell') && page.includes('auth-card'), 'centered branded auth card'],
-  [page.includes('We’ll send you a secure one-time sign-in link. No password needed.'), 'one-time link guidance'],
-  [page.includes('You’ll return to the page you originally requested after signing in.'), 'destination guidance'],
-  [page.includes('Already requested a link? Check your inbox before requesting another.'), 'duplicate-request guidance'],
-  [form.includes('Check your email') && form.includes('Change email'), 'sent state and change-email action'],
-  [form.includes('Resend sign-in link') && form.includes('cooldownSeconds'), 'cooldown-aware resend'],
-  [errors.includes('Too many sign-in links were requested. Please wait a little before requesting another link. If you recently requested one, check your inbox first.'), 'exact rate-limit UX copy'],
+  [page.includes('We’ll email you a secure 6-digit sign-in code. No password needed.'), 'one-time code guidance'],
+  [page.includes('After verification, you’ll continue to the page you originally requested.'), 'destination guidance'],
+  [page.includes('Delivery may take up to 3 minutes. Please wait before requesting another code.'), 'PVAMU delivery-delay guidance'],
+  [form.includes('PVAMU inboxes may take up to 3 minutes') && form.includes('Enter your sign-in code') && form.includes('Change email'), 'verification state, PVAMU delay guidance, and change-email action'],
+  [form.includes('Resend code') && form.includes('cooldownSeconds'), 'cooldown-aware resend'],
+  [errors.includes('Too many sign-in codes were requested. Please wait before requesting another.'), 'exact rate-limit UX copy'],
   [nav.includes('next="/workspace"') && !nav.includes('nav-workspace-link'), 'signed-out sign-in action without duplicate Workspace pill'],
   [button.includes('<span>Sign in</span>') && button.includes("next = '/workspace'") && !button.includes('Sign in with email'), 'compact sign-in label'],
   [home.includes('Submit to the Hub') && !home.includes('Sign in'), 'home has task CTA without duplicate sign-in CTA'],

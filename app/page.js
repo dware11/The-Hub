@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { getOpportunities, getEvents, getAnnouncements } from '../lib/data';
 import { RotatingQuotes } from '../components/HomeInteractive';
 import HomeSpotlightCarousel from '../components/HomeSpotlightCarousel';
-import { isClosingThisWeek } from '../lib/dateFilters';
+import { getHubBusinessDate, isActiveOpportunity, isClosingThisWeek } from '../lib/dateFilters';
 
 const QUOTES = [{ text: 'Excellence lives at Prairie View A&M University. It always has. It always will.', author: 'Dr. Tomikia P. LeGrande · President, Prairie View A&M University' }];
 const localDate = value => new Date(`${value}T12:00:00`);
@@ -11,15 +11,16 @@ const publishedDate = item => new Date(item.published_at || item.created_at);
 
 export default async function HomePage() {
   const [opportunities, events, announcements] = await Promise.all([getOpportunities(), getEvents(), getAnnouncements()]);
-  const today = new Date();
-  const open = opportunities.filter(item => !item.deadline || localDate(item.deadline) >= today);
+  const today = getHubBusinessDate();
+  const todayAtNoon = localDate(today);
+  const open = opportunities.filter(item => isActiveOpportunity(item, today));
   const spotlight = [
     ...open.filter(item => item.is_featured || item.spotlight || item.featured).map(item => ({ ...item, contentType: 'opportunity', href: `/opportunities/${item.id}` })),
-    ...events.filter(item => (item.is_featured || item.spotlight || item.featured) && localDate(item.end_date || item.date) >= today).map(item => ({ ...item, contentType: 'event', href: `/events/${item.id}` })),
+    ...events.filter(item => (item.is_featured || item.spotlight || item.featured) && localDate(item.end_date || item.date) >= todayAtNoon).map(item => ({ ...item, contentType: 'event', href: `/events/${item.id}` })),
     ...announcements.filter(item => item.is_featured).map(item => ({ ...item, contentType: 'announcement', href: `/announcements/${item.id}` })),
   ].sort((a,b) => (a.spotlight_rank || 99) - (b.spotlight_rank || 99)).slice(0,3);
   const closing = open.filter(item => item.deadline && isClosingThisWeek(item.deadline, today)).sort((a,b) => localDate(a.deadline) - localDate(b.deadline)).slice(0,4);
-  const upcoming = events.filter(item => item.home_visible !== false && localDate(item.end_date || item.date) >= today).sort((a,b) => (a.home_rank || 99) - (b.home_rank || 99) || localDate(a.date) - localDate(b.date)).slice(0,4);
+  const upcoming = events.filter(item => item.home_visible !== false && localDate(item.end_date || item.date) >= todayAtNoon).sort((a,b) => (a.home_rank || 99) - (b.home_rank || 99) || localDate(a.date) - localDate(b.date)).slice(0,4);
   const latestAnnouncements = [...announcements].filter(item => !/engineering hub pilot is live/i.test(item.title || '')).sort((a,b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || publishedDate(b) - publishedDate(a)).slice(0,4);
 
   return <div className="home-page">

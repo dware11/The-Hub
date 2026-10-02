@@ -78,13 +78,12 @@ export default function OpportunitiesBrowser({ items }) {
     </div>
 
     {visible.length ? <div className="opportunity-list">{visible.map((item) => {
-      const deadlinePassed = item.deadline && new Date(item.deadline + 'T23:59:59') < new Date();
       const compensationLabel = opportunityCompensationLabel(item.compensation_type, item.paid);
       const majors = (item.majors || []).filter(value => value && value !== 'All majors').slice(0, 3);
       return <Link className="card opportunity-card opportunity-row" href={'/opportunities/' + item.id} key={item.id}>
         <div className="opportunity-row-main"><div className="opportunity-tags">{item.type && item.type !== 'Other' && <span>{item.type}</span>}{compensationLabel !== 'Not specified' && <span>{compensationLabel}</span>}{item.work_mode && <span>{item.work_mode}</span>}</div>
         <h3>{item.title}</h3><p className="opportunity-org">{item.org || 'Organization not provided'}</p></div>
-        <div className="opportunity-row-meta">{majors.length > 0 && <small><strong>Majors</strong> {majors.join(' · ')}</small>}{(item.location || item.work_mode) && !['n/a','not specified'].includes(String(item.location || item.work_mode).trim().toLowerCase()) && <small><strong>Format</strong> {item.location || item.work_mode}</small>}<strong className={deadlinePassed ? 'deadline-passed' : ''}>{deadlinePassed ? 'Deadline has passed' : item.deadline ? 'Deadline ' + new Date(item.deadline + 'T00:00:00').toLocaleDateString() : deadlineLabel(item.deadline_type, null, item.posted_date)}</strong></div>
+        <div className="opportunity-row-meta">{majors.length > 0 && <small><strong>Majors</strong> {majors.join(' · ')}</small>}{(item.location || item.work_mode) && !['n/a','not specified'].includes(String(item.location || item.work_mode).trim().toLowerCase()) && <small><strong>Format</strong> {item.location || item.work_mode}</small>}<strong>{item.deadline ? 'Deadline ' + new Date(item.deadline + 'T12:00:00').toLocaleDateString() : deadlineLabel(item.deadline_type, null, item.posted_date)}</strong></div>
       </Link>;
     })}</div> : <div className="empty-results"><h2>No matching opportunities</h2><p>Clear a filter or choose a broader option.</p></div>}
 

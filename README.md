@@ -36,9 +36,10 @@ flags to false and provide live Supabase configuration.
 
 ## 2. Passwordless email sign-in
 
-1. In Supabase Auth → Providers → Email, enable email OTP/magic links and
-   configure the SMTP sender appropriate for the pilot.
-2. Add the deployed site's `/auth/confirm` URL to the Supabase redirect allowlist.
+1. In Supabase Auth → Providers → Email, enable passwordless email and
+   configure the SMTP sender appropriate for the pilot. The Hub uses typed
+   six-digit OTP codes; magic-link routes remain only as a temporary fallback.
+2. Set the Supabase Site URL to `https://hub.codepv.org` and add `https://hub.codepv.org/auth/confirm` to the redirect allowlist. Keep the staging callback temporarily during pilot testing.
 3. Roles are pre-provisioned or granted through the Website Committee; a
    PVAMU email suffix proves mailbox control only and never grants a role.
 4. Review `SUPABASE_EMAIL_AUTH_LAUNCH_RUNBOOK.md` for templates, redirects,
@@ -51,12 +52,12 @@ flags to false and provide live Supabase configuration.
 2. Set `RESEND_API_KEY`, `DIGEST_FROM_EMAIL` (must be on the verified
    domain), and `DIGEST_TO_EMAIL` (comma-separated for multiple
    recipients, e.g. a Google Group) in your env vars.
-3. On Vercel, the schedule in `vercel.json` (`0 13 * * 1` — Mondays,
-   13:00 UTC) triggers `GET /api/cron/weekly-digest` automatically once
-   deployed; no separate setup needed. Set `CRON_SECRET` in your Vercel
-   project env vars to stop the endpoint from being callable by anyone
-   who finds the URL — Vercel Cron sends it automatically as a bearer
-   token.
+3. The weekly digest is intentionally unscheduled for the V1 pilot while
+   institutional email delivery is being stabilized. The protected
+   `GET /api/cron/weekly-digest` endpoint remains available for a later launch.
+   Before enabling a Vercel Cron schedule, set `CRON_SECRET` in the Vercel
+   project environment so the endpoint cannot be called without the matching
+   bearer token.
 
 ## 4. Auto-archive (pg_cron)
 
@@ -146,7 +147,8 @@ local parser and manual-entry workflow remain available.
 
 Push to a GitHub repo and import it on [Vercel](https://vercel.com). Add
 all the env vars from `.env.local.example` in the Vercel project settings.
-`vercel.json` wires up the weekly digest cron automatically.
+The weekly digest cron is intentionally disabled for the V1 pilot. Add a
+reviewed production schedule only after institutional email delivery is stable.
 
 ## What's Phase 2 (not built here)
 

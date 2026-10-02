@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-const baseUrl = process.env.HOSTED_BASE_URL || 'https://code-engineering-hub-staging.vercel.app';
+const baseUrl = process.env.HOSTED_BASE_URL || 'https://hub.codepv.org';
 const fetchPage = async path => {
   const response = await fetch(`${baseUrl}${path}`, { redirect: 'manual' });
   assert.ok([200, 307, 308].includes(response.status), `${path} returned ${response.status}`);
