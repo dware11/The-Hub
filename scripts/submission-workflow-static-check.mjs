@@ -53,10 +53,11 @@ assert.ok(form.includes('updateOpportunityType') && form.includes('FULL_TIME_DEF
 assert.ok(validation.includes("deadlineType === 'specific_date'") && validation.includes('deadline: deadlineType'), 'server validation does not enforce deadline states');
 assert.ok(extraction.includes('export async function extractSubmission') && extraction.includes('missing_fields') && extraction.includes('technical:'), 'normalized extraction interface is incomplete');
 assert.ok(form.includes('extractSubmission(') && !form.includes('parseMultipleSources('), 'form still depends directly on parser provider');
-for (const heading of ['Submission','Submission details &amp; source','Submitted by','Event organizer / hosting organization','Review checklist']) assert.ok(review.includes(heading), `review section missing: ${heading}`);
+for (const heading of ['Submission','Start with the source','Submitted by','Event organizer / hosting organization','Reviewer checklist']) assert.ok(review.includes(heading), `review section missing: ${heading}`);
 for (const action of ['Approve &amp; Publish','Request Correction','Reject']) assert.ok(review.includes(action), `review action missing: ${action}`);
-for (const label of ['Official source opened and works','Title/headline matches the official source','Date/deadline matches the official source','Host/organization matches the official source','Submitted contact is reasonable','Content is safe and appropriate for the Hub']) assert.ok(checklist.includes(label), `review checklist item missing: ${label}`);
-assert.ok(checklist.includes('REVIEW_CHECKS.every'), 'all six checklist items must be required before approval');
+for (const label of ['Open the source or application link','Confirm the title and organization','Confirm the important dates and links','Read the description for accuracy','Confirm the public contact','Confirm it is appropriate for students']) assert.ok(checklist.includes(label), `review checklist item missing: ${label}`);
+assert.ok(checklist.includes('nudity') && checklist.includes('sexual content') && checklist.includes('unsafe material'), 'student-safety guidance is incomplete');
+assert.ok(checklist.includes('REVIEW_CHECKS.every'), 'every checklist item must be required before approval');
 assert.ok(review.includes('disabled={busy||!complete}') && actions.includes("'needs_correction'"), 'all final decisions must require and persist the completed checklist');
 assert.equal((review.match(/>Reject</g) || []).length, 1, 'detail review must have exactly one Reject action');
 assert.ok(!queue.includes('className="chip">Reject</button>\n                <button'), 'queue card still has a duplicate Reject action');

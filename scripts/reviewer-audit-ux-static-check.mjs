@@ -21,7 +21,7 @@ assert.match(reviewPage, /viewerRoleId=\{viewer\.role\.id\}/);
 assert.match(detailPage, /getPendingQueue\(\{ includeTechnical: showTechnical \}\)/);
 
 for (const source of [queue, detail]) {
-  assert.match(source, /Source evidence|Submission details &amp; source/);
+  assert.match(source, /Source evidence|Submission details &amp; source|Start with the source/);
   assert.match(source, /Details to confirm/);
   assert.match(source, /Technical diagnostics/);
 }
