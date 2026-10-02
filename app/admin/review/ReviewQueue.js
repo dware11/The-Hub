@@ -1,10 +1,9 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { approveItem, rejectItem, requestCorrection } from './actions';
 import { activeReviewType, boundedReviewItems, reviewQueueCounts } from '../../../lib/reviewQueue';
-import { REVIEW_CHECKS, isReviewChecklistComplete, reviewEvidence } from '../../../lib/reviewChecklist';
 import { deadlineLabel } from '../../../lib/opportunityOptions';
 
 const PAGE_SIZE = 6;
@@ -75,14 +74,8 @@ function IntakeEvidence({ evidence, item, showTechnical = false }) {
 }
 
 export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId = null }) {
-  const [items, setItems] = useState(queue);
-  const [pendingId, setPendingId] = useState(null);
-  const [message, setMessage] = useState('');
-  const [checklist, setChecklist] = useState({});
-  const [reviewItem, setReviewItem] = useState(null);
-  const [reviewNote, setReviewNote] = useState('');
+  const items = queue;
   const [visible, setVisible] = useState(Object.fromEntries(SECTIONS.map(([key]) => [key, PAGE_SIZE])));
-  const [busy, startTransition] = useTransition();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,31 +96,8 @@ export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
-  function decide(type, key, item, action) {
-    if (!isReviewChecklistComplete(checklist[item.id])) { setMessage(`${item.title} cannot receive a final decision until every review checklist item is confirmed.`); return; }
-    setPendingId(item.id);
-    setMessage(`${action === 'approve' ? 'Approving' : 'Rejecting'} ${item.title}.`);
-    startTransition(async () => {
-      try {
-        const evidence = reviewEvidence(checklist[item.id], reviewNote);
-        const result = action === 'approve' ? await approveItem(type, item.id, evidence) : await rejectItem(type, item.id, reviewNote, evidence);
-        if (result.ok) {
-          setItems((previous) => ({ ...previous, [key]: previous[key].filter((candidate) => candidate.id !== item.id) }));
-          setMessage(`${item.title} was ${action === 'approve' ? 'approved and published' : 'rejected'}.`);
-          setReviewItem(null);
-          router.refresh();
-        } else setMessage(`${item.title} could not be updated. ${result.error || 'Try again.'}`);
-      } catch (error) {
-        setMessage(`${item.title} could not be updated. ${error?.message || 'Try again.'}`);
-      } finally {
-        setPendingId(null);
-      }
-    });
-  }
-
   return <><section className="review-priority-strip" aria-label="Review queue priorities"><div><span>Pending Review</span><strong>{total}</strong></div><div className="warning"><span>3–4 Days</span><strong>{warningCount}</strong></div><div className="urgent"><span>5+ Days</span><strong>{urgentCount}</strong></div><div><span>Deadline Approaching</span><strong>{approachingCount}</strong></div></section><div className="review-dashboard review-dashboard-operational">
     <div className="review-queue-column">
-      <p className="sr-only" role="status" aria-live="polite">{message}</p>
       <nav className="review-type-tabs" aria-label="Filter pending review items by content type">
         {FILTERS.map(([value, label]) => {
           const count = value === 'all' ? total : counts[value];
@@ -142,7 +112,6 @@ export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId
       {shownSections.map(([key, type, label]) => !items[key].length ? null : <section className="review-section" key={key} aria-labelledby={`review-${key}`}>
         <div className="section-title"><h2 id={`review-${key}`}>{label}</h2><span className="chip active">{items[key].length} waiting</span></div>
         <div className="review-card-list">{boundedReviewItems(items[key], visible[key]).map((item) => {
-          const working = busy && pendingId === item.id;
           const itemPriority=priority(item);
           const ownSubmission = Boolean(viewerRoleId && item.submitted_by?.id === viewerRoleId);
           return <article className={`card review-card priority-${itemPriority}`} key={item.id}>
@@ -155,7 +124,7 @@ export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId
             <div className="review-card-actions" aria-label={`Review actions for ${item.title}`}>
                 {ownSubmission
                   ? <span className="review-self-notice" role="status">Another reviewer must review this submission.</span>
-                  : <button disabled={working} onClick={() => { setReviewItem({ type, key, item }); setReviewNote(''); setMessage(''); }} className="gold-button">Review checklist</button>}
+                  : <Link href={`/admin/review/${type}/${item.id}`} className="gold-button">Review submission</Link>}
               </div>
             </div>
             <div className="review-key-meta">
@@ -178,6 +147,5 @@ export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId
         {visible[key] < items[key].length && <button type="button" className="review-show-more" onClick={() => setVisible((previous) => ({ ...previous, [key]: previous[key] + PAGE_SIZE }))}>Show {Math.min(PAGE_SIZE, items[key].length - visible[key])} more {label.toLowerCase()} <span>({items[key].length - visible[key]} remaining)</span></button>}
       </section>)}
     </div>
-    {reviewItem && <dialog open className="review-dialog" aria-labelledby="review-dialog-title" onKeyDown={e=>{if(e.key==='Escape'&&!pendingId)setReviewItem(null)}}><div className="review-dialog-card"><button className="review-dialog-close" disabled={Boolean(pendingId)} aria-label="Close review checklist" onClick={()=>setReviewItem(null)}>×</button><h2 id="review-dialog-title">Verify &amp; decide</h2><p>Complete each confirmation before making a final decision. The Hub does not automatically verify source links.</p>{REVIEW_CHECKS.map(([key,label])=><label key={key}><input type="checkbox" disabled={Boolean(pendingId)} checked={Boolean(checklist[reviewItem.item.id]?.[key])} onChange={e=>setChecklist({...checklist,[reviewItem.item.id]:{...(checklist[reviewItem.item.id]||{}),[key]:e.target.checked}})} /> {label}</label>)}<label>Correction / rejection note<textarea rows="3" disabled={Boolean(pendingId)} value={reviewNote} onChange={e=>setReviewNote(e.target.value)} placeholder="Required for correction requests or rejection." /></label><p className="workspace-status" role="status" aria-live="assertive">{message}</p><div className="review-dialog-actions"><button className="gold-button" disabled={Boolean(pendingId)||!isReviewChecklistComplete(checklist[reviewItem.item.id])} onClick={()=>decide(reviewItem.type,reviewItem.key,reviewItem.item,'approve')}>Approve &amp; Publish</button><button className="chip" disabled={Boolean(pendingId)||!isReviewChecklistComplete(checklist[reviewItem.item.id])} onClick={async()=>{if(!reviewNote.trim()){setMessage('Add a note before requesting correction.');return;}setPendingId(reviewItem.item.id);try{const result=await requestCorrection(reviewItem.type,reviewItem.item.id,reviewNote,reviewEvidence(checklist[reviewItem.item.id],reviewNote));if(result.ok){setItems((previous)=>({...previous,[reviewItem.key]:previous[reviewItem.key].filter((candidate)=>candidate.id!==reviewItem.item.id)}));setMessage('Correction request recorded.');setReviewItem(null);router.refresh();}else setMessage(result.error||'Correction request failed.');}catch(error){setMessage(error?.message||'Correction request failed.');}finally{setPendingId(null)}}}>Request Correction</button><button className="chip" disabled={Boolean(pendingId)||!isReviewChecklistComplete(checklist[reviewItem.item.id])} onClick={()=>decide(reviewItem.type,reviewItem.key,reviewItem.item,'reject')}>Reject</button></div></div></dialog>}
   </div></>;
 }

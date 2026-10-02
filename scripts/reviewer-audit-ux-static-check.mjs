@@ -32,8 +32,9 @@ assert.match(detail, /suggestion\.label/);
 assert.match(adminData, /submitted_by:user_roles![^(]+\(id, full_name, email, org\)/);
 assert.match(queue, /Another reviewer must review this submission\./);
 assert.match(queue, /item\.submitted_by\?\.id === viewerRoleId/);
-assert.match(queue, /onClick=\{\(\)=>decide\(reviewItem\.type,reviewItem\.key,reviewItem\.item,'approve'\)\}/);
-assert.match(queue, /aria-live="assertive">\{message\}/);
+assert.match(queue, /href=\{`\/admin\/review\/\$\{type\}\/\$\{item\.id\}`\}/);
+assert.match(queue, /Review submission/);
+assert.doesNotMatch(queue, /Verify &amp; decide/);
 
 assert.match(auditData, /getContentEditAudit/);
 assert.match(auditData, /content_edit/);
