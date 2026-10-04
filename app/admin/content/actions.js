@@ -53,7 +53,7 @@ export async function hardDeleteContent(type,id,reason){const viewer=await getVi
 
 export async function confirmOpportunityAvailability(id){
   const viewer=await getViewer();
-  if(!isSuperAdmin(viewer))return{ok:false,error:'Super Admin access required'};
+  if(!isAdmin(viewer))return{ok:false,error:'Administrator access required'};
   if(isDemoMode)return{ok:true,demo:true,last_verified_at:new Date().toISOString(),next_review_at:new Date(Date.now()+30*86400000).toISOString().slice(0,10)};
   const supabase=await createServerSupabaseClient();
   const{data:opportunity,error:opportunityError}=await supabase.from('opportunities').select('id,status,deadline_type').eq('id',id).maybeSingle();

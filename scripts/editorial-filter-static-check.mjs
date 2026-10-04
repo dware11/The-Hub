@@ -10,19 +10,17 @@ assert.match(read('components/EventsAllBrowser.js'), /Hosting organization/);
 assert.match(read('components/EventsAllBrowser.js'), /organizations=\{organizations\}/);
 assert.doesNotMatch(read('components/EventsAllBrowser.js'), /category === 'Engineering Student Organizations'/);
 assert.match(read('components/EventsCalendarBrowser.js'), /searchParams\.get\('q'\)/);
-assert.match(read('components/EventsCalendarBrowser.js'), /eventOrganizations\(events\)/);
+assert.match(read('components/EventsCalendarBrowser.js'), /eventOrganizations\(events, approvedOrganizations\)/);
 const organizationFixtures = [
-  { org: 'SHPE' },
-  { org: 'Society of Hispanic Professional Engineers' },
-  { org: 'College of Engineering Student Services' },
-  { org: 'New Robotics Club' },
+  { org: 'Council of Distinguished Engineers (C.O.D.E.)' },
+  { org: 'Prairie View A&M University' },
+  { org: 'Roy G. Perry College of Engineering' },
 ];
-const organizationOptions = eventOrganizations(organizationFixtures);
-assert.equal(organizationOptions.filter(item => item.value === 'SHPE').length, 1);
-assert.equal(organizationOptions.find(item => item.value === 'SHPE')?.label, 'Society of Hispanic Professional Engineers (SHPE)');
-assert.ok(organizationOptions.some(item => item.label === 'New Robotics Club'));
-assert.ok(matchesEventOrganizations({ org: 'Society of Hispanic Professional Engineers' }, ['SHPE']));
-assert.ok(!matchesEventOrganizations({ org: 'NSBE' }, ['SHPE']));
+const approvedOrganizations = ['Council of Distinguished Engineers'];
+const organizationOptions = eventOrganizations(organizationFixtures, approvedOrganizations);
+assert.deepEqual(organizationOptions, [{ value: 'Council of Distinguished Engineers', label: 'Council of Distinguished Engineers' }]);
+assert.ok(matchesEventOrganizations({ org: 'Council of Distinguished Engineers (C.O.D.E.)' }, ['Council of Distinguished Engineers'], approvedOrganizations));
+assert.ok(!matchesEventOrganizations({ org: 'Prairie View A&M University' }, ['Council of Distinguished Engineers'], approvedOrganizations));
 assert.match(read('components/OpportunitiesBrowser.js'), /Search opportunities/);
 assert.doesNotMatch(read('components/AnnouncementsBrowser.js'), /announcement-feature/);
 assert.match(read('components/HomeSpotlightCarousel.js'), /contentType === 'announcement'/);
@@ -44,6 +42,6 @@ assert.match(read('components/OpportunitiesBrowser.js'), /Clear majors/);
 assert.match(read('lib/search.js'), /normalize\('NFKD'\)/);
 assert.match(read('lib/dateFilters.js'), /monday/);
 assert.match(read('components/MobileNav.js'), /aria-expanded/);
-assert.match(read('app/admin/review/ReviewQueue.js'), /<dialog open/);
-assert.match(read('app/admin/review/ReviewQueue.js'), /Approve &amp; Publish/);
+assert.match(read('app/admin/review/ReviewQueue.js'), /\/admin\/review\/\$\{type\}\/\$\{item\.id\}/);
+assert.match(read('app/admin/review/[type]/[id]/ReviewSubmission.js'), /Approve & Publish/);
 console.log('Editorial, recommendation, search, and calendar interaction checks passed.');

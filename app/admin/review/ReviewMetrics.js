@@ -24,7 +24,7 @@ export default function ReviewMetrics({ metrics, engagementMetrics, feedbackMetr
       {WINDOWS.map(([value, label]) => <button type="button" key={value} aria-pressed={window === value} className={window === value ? 'active' : ''} onClick={() => setWindow(value)}>{label}</button>)}
     </div>
     <p className="review-window-status" aria-live="polite">Showing submissions from {window === 'week' ? 'the trailing 7 days' : window === 'month' ? 'the trailing 30 days' : 'all available history'}.</p>
-    {current.partial && <p className="review-partial" role="status">Some provider totals are unavailable; only returned counts are shown.</p>}
+    {current.partial && <p className="review-partial" role="status">Some activity totals are unavailable; only available counts are shown.</p>}
     <div className="review-metrics-grid">
       <Metric label="Total submissions" value={current.total} />
       <Metric label="Submitted events" value={current.events} />

@@ -10,8 +10,8 @@ export default function AuthErrorPage({ searchParams }) {
           ? 'Your sign-in succeeded, but the Hub could not safely match your email to a pre-approved role. No access was granted. Contact a Hub administrator.'
           : 'Something went wrong finishing your email sign-in. Try again, and if it keeps happening, reach out to C.O.D.E.'}
       </p>
-      <Link href="/submit" className="text-sm text-purple-700 hover:underline">
-        Back to submit →
+      <Link href="/auth/signin" className="text-sm text-purple-700 hover:underline">
+        Return to sign in →
       </Link>
     </div>
   );

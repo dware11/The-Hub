@@ -55,7 +55,7 @@ function IntakeIdentity({ item, evidence }) {
   </div>;
 }
 
-function IntakeEvidence({ evidence, item, showTechnical = false }) {
+function IntakeEvidence({ evidence, item }) {
   if (!evidence) return null;
   return <details className="review-details review-evidence">
     <summary>Submission details &amp; source</summary>
@@ -69,11 +69,10 @@ function IntakeEvidence({ evidence, item, showTechnical = false }) {
       <span><strong>{suggestion.label}:</strong> {displaySuggestion(suggestion.value)}</span>
       <small>{suggestion.needsReview ? 'Needs careful verification against the source.' : 'Confirm against the source before deciding.'}</small>
     </li>)}</ul></div> : <p>No suggested values were recorded. Verify the submitted details directly against the source.</p>}
-    {showTechnical && evidence.diagnostics && <details className="review-details"><summary>Technical diagnostics</summary><div className="review-key-meta"><span>Intake state: {evidence.diagnostics.intakeState || 'not recorded'}</span><span>Acknowledgment: {evidence.diagnostics.acknowledgment ? 'accepted' : 'not recorded'}</span></div>{evidence.diagnostics.artifacts?.length ? <ul>{evidence.diagnostics.artifacts.map((artifact) => <li key={artifact.id}>{artifact.sourceType || 'unknown source'}: {artifact.processingStatus || 'status unavailable'}{artifact.mimeType ? ` · ${artifact.mimeType}` : ''}</li>)}</ul> : null}{evidence.diagnostics.suggestions?.length ? <ul>{evidence.diagnostics.suggestions.map((suggestion) => <li key={suggestion.id}><strong>{suggestion.fieldName}</strong>: {suggestion.provider || 'provider unavailable'} / {suggestion.parserVersion || 'parser unavailable'}{Number.isFinite(suggestion.confidence) ? ` / ${suggestion.confidence}% confidence` : ''}{suggestion.reviewReason ? ` · ${suggestion.reviewReason}` : ''}</li>)}</ul> : <p>No extraction diagnostics were recorded.</p>}</details>}
   </details>;
 }
 
-export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId = null }) {
+export default function ReviewQueue({ queue }) {
   const items = queue;
   const [visible, setVisible] = useState(Object.fromEntries(SECTIONS.map(([key]) => [key, PAGE_SIZE])));
   const pathname = usePathname();
@@ -113,7 +112,7 @@ export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId
         <div className="section-title"><h2 id={`review-${key}`}>{label}</h2><span className="chip active">{items[key].length} waiting</span></div>
         <div className="review-card-list">{boundedReviewItems(items[key], visible[key]).map((item) => {
           const itemPriority=priority(item);
-          const ownSubmission = Boolean(viewerRoleId && item.submitted_by?.id === viewerRoleId);
+          const ownSubmission = Boolean(item.own_submission);
           return <article className={`card review-card priority-${itemPriority}`} key={item.id}>
             <div className="review-card-heading">
               <div>
@@ -133,7 +132,7 @@ export default function ReviewQueue({ queue, showTechnical = false, viewerRoleId
               {item.location && <span>{item.location}</span>}
             </div>
             <SourceLinks item={item} />
-            <IntakeEvidence evidence={item.intake_evidence} item={item} showTechnical={showTechnical} />
+            <IntakeEvidence evidence={item.intake_evidence} item={item} />
             {(item.description || item.body || item.eligibility || item.contact_name || item.contact_email) && <details className="review-details">
               <summary>View details</summary>
               {(item.description || item.body) && <p>{item.description || item.body}</p>}

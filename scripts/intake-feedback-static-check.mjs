@@ -27,9 +27,11 @@ for (const control of [
 for (const prohibited of ['ip_address', 'user_agent', 'device_id', 'email_address', 'corrected_value', 'raw_text']) {
   assert.doesNotMatch(migration, new RegExp(`\\n\\s*${prohibited}\\s+`, 'i'), `Prohibited feedback column: ${prohibited}`);
 }
-assert.match(submitForm, /Optional: parser quality feedback/);
+assert.match(submitForm, /How did the extraction do\?/);
+assert.match(submitForm, /\['accurate', 'Good'\]/);
+assert.match(submitForm, /\['major_edits', 'Needs work'\]/);
 assert.doesNotMatch(submitForm, /View technical details/);
-assert.match(actions, /isSuperAdmin\(viewer\)/);
+assert.match(actions, /canSubmit\(viewer\)/);
 assert.match(currentFeedbackMigration, /role = 'super_admin'/);
 assert.match(currentFeedbackMigration, /super admins read parser feedback/);
 assert.match(parserData, /getParserActivity/);
@@ -44,4 +46,4 @@ assert.match(submitForm, /Your submission is still complete/);
 assert.match(submitForm, /if \(!artifacts\.length && !pastedText\.trim\(\)\)[\s\S]{0,180}setStep\(3\)/);
 assert.match(review, /Submission details &amp; source/);
 assert.match(review, /createSignedUrl\(artifact\.storage_path, 600\)/);
-console.log('Intake checks passed: legacy redirect, private reviewer evidence, and super-admin-only parser feedback.');
+console.log('Intake checks passed: legacy redirect, private reviewer evidence, contributor feedback, and Super Admin-only feedback analysis.');

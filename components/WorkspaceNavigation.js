@@ -6,10 +6,10 @@ import { useState } from 'react';
 
 const GROUPS = [
   { label: 'Workspace', items: [{ label: 'Overview', href: '/admin' }] },
-  { label: 'Review', items: [{ label: 'Review Queue', href: '/admin/review' }] },
+  { label: 'Review', items: [{ label: 'Review Queue', href: '/admin/review' }, { label: 'Contributor Approvals', href: '/admin/committee', adminOnly: true }] },
   { label: 'Content', adminOnly: true, items: [{ label: 'Content Management', href: '/admin/content' }] },
-  { label: 'Operations', items: [{ label: 'Analytics', href: '/admin/analytics' }, { label: 'People & Access', href: '/admin/people', adminOnly: true }] },
-  { label: 'Super Admin', superOnly: true, items: [{ label: 'Issues', href: '/admin/issues' }, { label: 'System Insights', href: '/admin/system-insights' }, { label: 'History', href: '/admin/history' }] },
+  { label: 'Operations', items: [{ label: 'Analytics', href: '/admin/analytics' }, { label: 'Issues', href: '/admin/issues', adminOnly: true }, { label: 'People & Access', href: '/admin/people', adminOnly: true }] },
+  { label: 'Super Admin', superOnly: true, items: [{ label: 'System Insights', href: '/admin/system-insights' }, { label: 'History', href: '/admin/history' }] },
 ];
 
 function isActivePath(pathname, href) {

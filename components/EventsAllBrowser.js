@@ -10,7 +10,7 @@ import { eventOccursOnDate } from '../lib/eventRecurrence';
 const asDate = value => new Date(`${value}T12:00:00`);
 const PAGE_SIZES = [10, 20, 50];
 
-export default function EventsAllBrowser({ events, initialDate = '' }) {
+export default function EventsAllBrowser({ events, approvedOrganizations = [], initialDate = '' }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [organizationsSelected, setOrganizationsSelected] = useState([]);
@@ -20,7 +20,7 @@ export default function EventsAllBrowser({ events, initialDate = '' }) {
   const [filtersOpen, setFiltersOpen] = useState(Boolean(initialDate));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const organizations = useMemo(() => eventOrganizations(events), [events]);
+  const organizations = useMemo(() => eventOrganizations(events, approvedOrganizations), [events, approvedOrganizations]);
   const activeFilterCount = Boolean(category) + organizationsSelected.length + Boolean(specificDate || range !== 'upcoming');
 
   const shown = useMemo(() => {
@@ -28,13 +28,13 @@ export default function EventsAllBrowser({ events, initialDate = '' }) {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
     return events.filter(event =>
       (!category || matchesEventCategories(event, [category]))
-      && matchesEventOrganizations(event, organizationsSelected)
+      && matchesEventOrganizations(event, organizationsSelected, approvedOrganizations)
       && matchesSearch([event.title, event.org, event.description, event.location], search)
       && (specificDate
         ? eventOccursOnDate(event, specificDate)
         : (range === 'all' || (range === 'month' ? asDate(event.date) <= monthEnd : asDate(event.end_date || event.date) >= now)))
     ).sort((a, b) => (sort === 'latest' ? -1 : 1) * (asDate(a.date) - asDate(b.date)));
-  }, [events, search, category, organizationsSelected, range, specificDate, sort]);
+  }, [events, approvedOrganizations, search, category, organizationsSelected, range, specificDate, sort]);
 
   useEffect(() => setPage(1), [search, category, organizationsSelected, range, specificDate, sort, pageSize]);
   const pageCount = Math.max(1, Math.ceil(shown.length / pageSize));

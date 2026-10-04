@@ -92,15 +92,15 @@ export default function DesktopNavMenus({ reviewer, contributor, admin, superAdm
         <MenuGroup label="Workspace" href="/workspace" menuLabel="Workspace links" active={workspaceActive}>
           <MenuLink href="/admin" active={pathname === '/admin'}>Overview</MenuLink>
           <MenuLink href="/admin/review">Review Queue</MenuLink>
-          <MenuLink href="/admin/committee">Contributor Approvals</MenuLink>
           {admin && <>
+            <MenuLink href="/admin/committee">Contributor Approvals</MenuLink>
             <MenuLink href="/admin/content">Content Management</MenuLink>
+            <MenuLink href="/admin/issues">Issues</MenuLink>
             <MenuLink href="/admin/people">People &amp; Access</MenuLink>
           </>}
           <MenuLink href="/admin/analytics">Analytics</MenuLink>
           {superAdmin && <>
             <span className="desktop-nav-menu-label">Super Admin</span>
-            <MenuLink href="/admin/issues">Issues</MenuLink>
             <MenuLink href="/admin/history">History</MenuLink>
             <MenuLink href="/admin/system-insights">System Insights</MenuLink>
           </>}

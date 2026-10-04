@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, isDemoMode } from '../../../lib/supabaseServerClient';
 import { safeAuthDestination } from '../../../lib/authRedirects';
 
-// Supabase Auth redirects here after a user finishes signing in with
-// Exchanges the auth code for a session cookie, then
-// sends them back to wherever they were headed (default: the submit page).
+// Compatibility endpoint for an already-issued PKCE callback. The current Hub
+// sign-in screen verifies a typed OTP directly and does not render this route.
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');

@@ -18,7 +18,8 @@ const STATUS_OPTIONS = [
   ['rejected', 'Rejected'],
   ['unpublished', 'Unpublished'],
   ['archived', 'Archived'],
-  ['deleted', 'Deleted / soft-deleted'],
+  ['deleted', 'In trash'],
+  ['expired_before_review', 'Expired Before Review'],
 ];
 const EDITABLE_STATUSES = new Set(['published', 'unpublished', 'archived']);
 
@@ -26,7 +27,7 @@ function statusLabel(value) {
   return STATUS_OPTIONS.find(([status]) => status === value)?.[1] || String(value || 'Unknown').replaceAll('_', ' ');
 }
 
-export default function ContentManager({ rows, auditEdits = [], superAdmin = false }) {
+export default function ContentManager({ rows, auditEdits = [], superAdmin = false, availabilityAccess = false }) {
   const router = useRouter();
   const [items, setItems] = useState(rows);
   const [tab, setTab] = useState('all');
@@ -38,7 +39,7 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
   const [deleteReason, setDeleteReason] = useState('');
   const [actionTarget, setActionTarget] = useState(null);
   const [editorTarget, setEditorTarget] = useState(null);
-  const tabs = superAdmin ? [...BASE_TABS, ['availability', 'Apply ASAP Checks']] : BASE_TABS;
+  const tabs = availabilityAccess ? [...BASE_TABS, ['availability', 'Apply ASAP Checks']] : BASE_TABS;
 
   useEffect(() => setItems(rows), [rows]);
 
@@ -55,7 +56,7 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
       return 3;
     };
     return items.filter(row =>
-      (tab === 'all' || tab === 'spotlight' ? (tab === 'all' || row.is_featured) : tab === 'availability' ? row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling' && (!row.availability_review?.next_review_at || row.availability_review.next_review_at <= today) : row.content_type === tab)
+      (tab === 'all' || tab === 'spotlight' ? (tab === 'all' || row.is_featured) : tab === 'availability' ? row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling' && (row.availability_review?.next_review_at ? row.availability_review.next_review_at <= today : new Date(row.created_at).getTime() <= Date.now() - 30*86400000) : row.content_type === tab)
       && (status === 'active' ? ['pending', 'resubmitted', 'needs_correction', 'published', 'unpublished'].includes(row.status) : !status || row.status === status)
       && (!query || `${row.title} ${row.org || row.source || ''} ${row.description || row.body || ''}`.toLowerCase().includes(query))
       && (sort !== 'past_archived' || row.status === 'archived' || (row.content_type === 'event' && row.date && row.date < today))
@@ -73,7 +74,8 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
   }, [items, tab, status, search, sort]);
 
   async function act(row, action) {
-    setMessage(`${action} ${row.title}…`);
+    const actionLabel = action === 'soft_delete' ? 'Moving to trash' : action === 'unpublish' ? 'Unpublishing' : action === 'archive' ? 'Archiving' : action === 'restore' ? 'Restoring' : 'Updating';
+    setMessage(`${actionLabel} ${row.title}…`);
     const result = await manageContent(row.content_type, row.id, action);
     if (!result.ok) { setMessage(result.error || 'Update failed.'); return; }
     setItems(current => current.map(item => item.id === row.id && item.content_type === row.content_type ? {
@@ -136,8 +138,8 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
       <label><span>Status</span><select value={status} onChange={event => setStatus(event.target.value)}>{STATUS_OPTIONS.map(([value, label]) => <option value={value} key={value || 'all'}>{label}</option>)}</select></label>
       <label><span>Sort</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="upcoming">Upcoming</option><option value="recently_submitted">Recently submitted</option><option value="recently_updated">Recently updated</option><option value="past_archived">Past / archived</option></select></label>
     </div>
-    <div className="content-tabs" role="tablist" aria-label="Content type">{tabs.map(([value, label]) => <button type="button" role="tab" key={value} aria-selected={tab === value} aria-describedby={value === 'availability' ? 'availability-check-help' : undefined} className={tab === value ? 'active' : ''} onClick={() => setTab(value)}>{label} <span>{value === 'all' ? items.length : value === 'spotlight' ? items.filter(item => item.is_featured).length : value === 'availability' ? items.filter(item=>item.content_type==='opportunity'&&item.status==='published'&&item.deadline_type==='rolling'&&(!item.availability_review?.next_review_at||item.availability_review.next_review_at<=new Date().toISOString().slice(0,10))).length : items.filter(item => item.content_type === value).length}</span></button>)}</div>
-    {superAdmin && <p id="availability-check-help" className="content-tab-help">Apply ASAP Checks lists published opportunities without a firm deadline whose application link is due for a 30-day availability check.</p>}
+    <div className="content-tabs" role="tablist" aria-label="Content type">{tabs.map(([value, label]) => <button type="button" role="tab" key={value} aria-selected={tab === value} aria-describedby={value === 'availability' ? 'availability-check-help' : undefined} className={tab === value ? 'active' : ''} onClick={() => setTab(value)}>{label} <span>{value === 'all' ? items.length : value === 'spotlight' ? items.filter(item => item.is_featured).length : value === 'availability' ? items.filter(item=>item.content_type==='opportunity'&&item.status==='published'&&item.deadline_type==='rolling'&&(item.availability_review?.next_review_at?item.availability_review.next_review_at<=new Date().toISOString().slice(0,10):new Date(item.created_at).getTime()<=Date.now()-30*86400000)).length : items.filter(item => item.content_type === value).length}</span></button>)}</div>
+    {availabilityAccess && <p id="availability-check-help" className="content-tab-help">Apply ASAP Checks lists published opportunities without a firm deadline whose application link is due for a 30-day availability check.</p>}
     <p className="workspace-status" role="status" aria-live="polite">{message || `${filtered.length} records shown.`}</p>
     {filtered.length ? <div className="content-table" role="region" aria-label="Managed content records">{filtered.map(row => <div className="content-record" key={`${row.content_type}-${row.id}`}><article className="content-row">
       <div><div className="eyebrow">{row.content_type} · {statusLabel(row.status)}{row.is_featured ? ' · Home Spotlight' : ''}{row.content_type === 'announcement' && row.pinned ? ' · Homepage highlight' : ''}</div><h2>{row.title}</h2><p>{row.org || row.source || 'Organization not provided'}</p><small>{row.content_type === 'opportunity' ? (row.deadline ? `Deadline ${new Date(row.deadline + 'T12:00:00').toLocaleDateString()}` : deadlineLabel(row.deadline_type, null, row.posted_date)) : row.date ? `Event ${new Date(row.date + 'T12:00:00').toLocaleDateString()}` : 'No date recorded'}</small>{row.submitted_by_user && <small className="content-lifecycle-meta">Submitted by {row.submitted_by_user.full_name || row.submitted_by_user.email || 'Unknown submitter'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'Submission time unavailable'}</small>}</div>
@@ -155,9 +157,9 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
           {row.content_type === 'announcement' && <button className={row.pinned ? 'gold-button' : 'chip'} onClick={() => highlightAnnouncement(row)}>{row.pinned ? 'Remove homepage highlight' : 'Highlight in Latest Announcements'}</button>}
         </div>}
         <div className="content-action-group content-lifecycle-actions" role="group" aria-label="Content status actions">
-          {superAdmin && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling' && <><a className="chip" href={row.link} target="_blank" rel="noreferrer">Open application link</a><button className="gold-button" onClick={()=>confirmAvailability(row)}>Confirm still active</button><button className="chip" onClick={()=>setActionTarget({row,action:'archive'})}>Mark closed / archive</button></>}
+          {availabilityAccess && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling' && <><a className="chip" href={row.link} target="_blank" rel="noreferrer">Open application link</a><button className="gold-button" onClick={()=>confirmAvailability(row)}>Confirm still active</button><button className="chip" onClick={()=>setActionTarget({row,action:'archive'})}>Mark closed / archive</button></>}
           {row.status === 'published' && <button className="chip" onClick={() => setActionTarget({ row, action: 'unpublish' })}>Unpublish</button>}
-          {['published', 'unpublished'].includes(row.status) && !(superAdmin && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling') && <button className="chip" onClick={() => setActionTarget({ row, action: 'archive' })}>Archive</button>}
+          {['published', 'unpublished'].includes(row.status) && !(availabilityAccess && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling') && <button className="chip" onClick={() => setActionTarget({ row, action: 'archive' })}>Archive</button>}
           {EDITABLE_STATUSES.has(row.status) && <button className="chip" onClick={() => setActionTarget({ row, action: 'soft_delete' })}>Move to trash</button>}
           {row.status === 'deleted' && <button className="gold-button" onClick={() => act(row, 'restore')}>Restore</button>}
           {superAdmin && row.status === 'deleted' && <button className="danger-button" onClick={()=>setDeleteTarget(row)}>Delete permanently</button>}
@@ -165,6 +167,6 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
       </div>
     </article>{editorTarget === `${row.content_type}:${row.id}` && <ContentEditForms rows={[row]} auditEdits={auditEdits} embedded startOpen />}</div>)}</div> : <div className="workspace-empty">No content matches these filters.</div>}
     {deleteTarget&&<dialog open className="history-dialog" aria-labelledby="hard-delete-title"><div className="history-dialog-card"><button type="button" className="history-dialog-close" aria-label="Cancel permanent deletion" onClick={()=>setDeleteTarget(null)}>×</button><div className="eyebrow">Super Admin only</div><h2 id="hard-delete-title">Permanently delete this record?</h2><p><strong>{deleteTarget.title}</strong> cannot be restored. The audit event and deletion reason will remain.</p><label className="hard-delete-reason"><span>Required reason</span><textarea rows="4" minLength="10" value={deleteReason} onChange={event=>setDeleteReason(event.target.value)}/></label><div className="history-dialog-actions"><button className="chip" onClick={()=>setDeleteTarget(null)}>Cancel</button><button className="danger-button" disabled={deleteReason.trim().length<10} onClick={confirmHardDelete}>Delete permanently</button></div></div></dialog>}
-    {actionTarget&&<dialog open className="history-dialog" aria-labelledby="content-action-title"><div className="history-dialog-card"><h2 id="content-action-title">{actionTarget.action === 'archive' ? 'Archive this content?' : actionTarget.action === 'unpublish' ? 'Unpublish this content?' : 'Soft-delete this content?'}</h2><p><strong>{actionTarget.row.title}</strong></p><p>{actionCopy}</p><div className="history-dialog-actions"><button className="chip" onClick={()=>setActionTarget(null)}>Cancel</button><button className="danger-button" onClick={confirmAction}>Confirm {actionTarget.action === 'soft_delete' ? 'soft-delete' : actionTarget.action}</button></div></div></dialog>}
+    {actionTarget&&<dialog open className="history-dialog" aria-labelledby="content-action-title"><div className="history-dialog-card"><h2 id="content-action-title">{actionTarget.action === 'archive' ? 'Archive this content?' : actionTarget.action === 'unpublish' ? 'Unpublish this content?' : 'Move this content to trash?'}</h2><p><strong>{actionTarget.row.title}</strong></p><p>{actionCopy}</p><div className="history-dialog-actions"><button className="chip" onClick={()=>setActionTarget(null)}>Cancel</button><button className="danger-button" onClick={confirmAction}>{actionTarget.action === 'soft_delete' ? 'Move to trash' : `Confirm ${actionTarget.action}`}</button></div></div></dialog>}
   </section>;
 }

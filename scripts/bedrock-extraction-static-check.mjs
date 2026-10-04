@@ -36,7 +36,7 @@ assert.ok(
   'extraction feedback must distinguish success, partial, and failure states without repeating AI/debug wording',
 );
 assert.ok(actions.includes('contributorExtractionResult') && actions.includes('isSuperAdmin(viewer)'), 'normal contributors must receive sanitized extraction diagnostics');
-assert.ok(form.includes("canViewTechnical ? parsedResult : { ...parsedResult, technical: {} }"), 'non-super-admin clients must not retain technical extraction metadata');
+assert.ok(form.includes("const result = { ...parsedResult, technical: {} }"), 'submission clients must not retain technical extraction metadata');
 assert.ok(form.includes('invalidatePreparedIntake({ resetExtractedFields: true })'), 'changing a source must clear stale extraction state and values');
 for (const variable of ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN']) {
   assert.ok(envExample.includes(`${variable}=`), `server environment variable is missing: ${variable}`);
@@ -44,6 +44,9 @@ for (const variable of ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KE
 }
 assert.ok(!provider.includes('NEXT_PUBLIC_AWS_') && !actions.includes('NEXT_PUBLIC_AWS_'), 'AWS credentials must never be browser-exposed');
 assert.ok(provider.includes("provider: 'amazon-bedrock'") && provider.includes('usage:'), 'technical provider metadata is missing');
+assert.ok(provider.includes('mapDegreeEligibilityClassifications'), 'Bedrock results must apply deterministic degree/class-year mapping');
+for (const classification of ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate Student']) assert.ok(provider.includes(classification), `Bedrock eligibility guidance missing ${classification}`);
+assert.ok(provider.includes('ongoing review') && provider.includes('Do not select Graduating Senior or Recent Graduate when active enrollment is required'), 'Bedrock deadline or active-enrollment guidance is incomplete');
 assert.ok(actions.includes("return { ok: false, code }"), 'provider errors must be sanitized');
 
 console.log('Bedrock extraction static checks passed.');

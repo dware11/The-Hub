@@ -27,6 +27,8 @@ const parserModule = await loadModule(path.join(projectRoot, 'lib', 'multiSource
 const { parseMultipleSources } = parserModule.namespace;
 const validationModule = await loadModule(path.join(projectRoot, 'lib', 'validation.js'));
 const { validateSubmission } = validationModule.namespace;
+const preprocessingModule = await loadModule(path.join(projectRoot, 'lib', 'sourceTextPreprocessing.js'));
+const { jobBoardSourceHints, prepareSourceTextForExtraction } = preprocessingModule.namespace;
 
 const conocoPhillipsEmail = `
 Hello Professors and Deans,
@@ -100,6 +102,56 @@ assert.deepEqual(Array.from(fullTimePosting.tags.classifications), ['Senior', 'G
 for (const earlyYear of ['Freshman', 'Sophomore', 'Junior']) assert.ok(!fullTimePosting.tags.classifications.includes(earlyYear));
 const rollingOpportunity = await parseMultipleSources({ contentType: 'opportunity', artifacts: [], pastedText: 'Engineering fellowship applications are open until filled.' });
 assert.equal(rollingOpportunity.fields.deadlineType, 'rolling');
+const nvidiaInternship = await parseMultipleSources({
+  contentType: 'opportunity',
+  artifacts: [],
+  pastedText: `Organization: NVIDIA
+2027 Systems Software Engineering Internship
+Internship based on-site in Santa Clara, California.
+Applicants must be actively pursuing a B.S., M.S., or Ph.D. in Computer Science, Computer Engineering, or a related field.
+This is a paid internship. Applications are reviewed and accepted on an ongoing basis.
+Apply at https://www.nvidia.com/en-us/about-nvidia/careers/`,
+});
+assert.equal(nvidiaInternship.fields.organization, 'NVIDIA');
+assert.ok(nvidiaInternship.tags.categories.includes('Internship'));
+assert.ok(!nvidiaInternship.fields.deadline);
+assert.equal(nvidiaInternship.fields.deadlineType, 'rolling');
+assert.equal(nvidiaInternship.tags.compensation, 'Paid');
+assert.ok(nvidiaInternship.tags.workModes.includes('In person'));
+assert.deepEqual(Array.from(nvidiaInternship.tags.classifications), ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate Student']);
+assert.ok(!nvidiaInternship.tags.classifications.includes('Graduating Senior'));
+
+const nvidiaWorkdayPage = `Skip to main content
+CAREERS AT NVIDIA
+Sign In
+Home
+Search for Jobs
+NVIDIA 2027 Internships: Systems Software Engineering page is loaded
+NVIDIA 2027 Internships: Systems Software Engineering
+Apply
+locations
+US, CA, Santa Clara
+time type
+Full time
+posted on
+Posted 30+ Days Ago
+Throughout the 12-week full-time internship, students will work on projects that have a measurable impact.
+Must be actively enrolled in a university pursuing a B.S., M.S., or Ph.D. degree in Electrical Engineering, Computer Engineering, or a related field for the full duration of the internship.
+The hourly rate for our interns is 20 USD - 71 USD.
+Applications are accepted on an ongoing basis.
+Similar Jobs (5)
+Senior System Software Engineer, NvSci
+Official source URL: https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/NVIDIA-2027-Internships--Systems-Software-Engineering_JR2023492`;
+const workdayHints = jobBoardSourceHints(nvidiaWorkdayPage);
+assert.deepEqual({ ...workdayHints }, {
+  title: 'NVIDIA 2027 Internships: Systems Software Engineering',
+  organization: 'NVIDIA',
+  sourceUrl: 'https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/NVIDIA-2027-Internships--Systems-Software-Engineering_JR2023492',
+});
+const preparedWorkday = prepareSourceTextForExtraction(nvidiaWorkdayPage);
+assert.match(preparedWorkday, /^NVIDIA 2027 Internships: Systems Software Engineering\nOrganization shown in source header: NVIDIA/);
+assert.doesNotMatch(preparedWorkday, /CAREERS AT NVIDIA|Similar Jobs|Senior System Software Engineer/);
+assert.match(preparedWorkday, /Official source URL: https:\/\/nvidia\.wd5\.myworkdayjobs\.com/);
 const noDeadlineOpportunity = await parseMultipleSources({ contentType: 'opportunity', artifacts: [], pastedText: 'Engineering research opportunity. No application deadline.' });
 assert.equal(noDeadlineOpportunity.fields.deadlineType, 'no_deadline');
 

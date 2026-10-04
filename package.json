@@ -30,7 +30,9 @@
     "test:reviewer-audit-ux": "node scripts/reviewer-audit-ux-static-check.mjs",
     "test:role-management": "node scripts/manage-user-role-security-static-check.mjs",
     "test:final-v1": "node scripts/final-v1-static-check.mjs",
-    "test:hosted-deployment": "node scripts/hosted-deployment-check.mjs"
+    "test:hosted-deployment": "node scripts/hosted-deployment-check.mjs",
+    "test:final-uat": "node scripts/final-uat-correction-static-check.mjs",
+    "test:workflow-email": "node --experimental-vm-modules scripts/workflow-email-render-check.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.1136.0",

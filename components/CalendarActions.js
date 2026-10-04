@@ -22,9 +22,10 @@ export default function CalendarActions({ id, contentType = 'event', title, date
       Open in Apple Calendar
     </a>
     <div className="rounded-lg border border-line bg-cream/50 p-3 text-xs leading-relaxed text-slate">
-      <p>Sign in if prompted, review the {kind === 'deadline' ? 'deadline details' : 'event details'}, then press <strong>Save</strong> in your calendar.</p>
+      <p>Sign in if prompted, review the {kind === 'deadline' ? 'deadline details' : kind === 'reminder' ? 'personal reminder' : 'event details'}, then press <strong>Save</strong> in your calendar.</p>
       <p className="mt-1">{kind === 'deadline'
         ? 'For deadlines, consider reminders one week and one day before the due date.'
+        : kind === 'reminder' ? 'This reminder uses the date and time you selected; it does not create or change an opportunity deadline.'
         : 'For events, consider a reminder one hour before the start time.'}</p>
       <p className="mt-1 font-medium text-purple-900">The Hub never receives access to your calendar account.</p>
     </div>

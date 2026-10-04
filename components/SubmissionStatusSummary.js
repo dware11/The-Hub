@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 export default function SubmissionStatusSummary({ submissions = [] }) {
-  const attention = submissions.filter((item) => item.status === 'needs_correction' || item.status === 'rejected').length;
+  const attention = submissions.filter((item) => item.status === 'needs_correction').length;
   return <section className="submission-status-summary" aria-labelledby="submission-summary-title">
     <div>
       <div className="eyebrow">Your submissions</div>

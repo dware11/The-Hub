@@ -72,6 +72,12 @@ assert.match(report, /aria-modal="true"/);
 assert.match(report, /event\.key === 'Escape'/);
 assert.match(report, /formElement\.reset\(\)/);
 assert.match(reportAction, /\.from\('issue_reports'\)[\s\S]*\.insert/);
+assert.match(form, /Can’t find your organization\? Request it\./);
+assert.match(report, /organizationRequest/);
+for (const field of ['organization_name','organization_type','organization_contact_name','organization_contact_email','organization_website']) assert.ok(report.includes(field), `organization request field missing: ${field}`);
+assert.match(reportAction, /Sign in before requesting an organization addition/);
+assert.match(reportAction, /reporterEmail = viewer\.user\.email/);
+assert.match(reportAction, /organization_type/);
 
 // Multi-day events remain one source record and do not replace ordinary day entries.
 assert.match(calendar, /calendarWeekSegments/);

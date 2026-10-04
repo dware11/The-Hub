@@ -12,6 +12,7 @@ const SOURCE_LABELS = Object.freeze({
 const text = (value) => String(value || '').replaceAll('_', ' ');
 const label = (value) => text(value).replace(/\b\w/g, (character) => character.toUpperCase()).replace(/\bPdf\b/g, 'PDF').replace(/\bUrl\b/g, 'URL').replace(/\bAi\b/g, 'AI');
 const sourceLabel = (value) => SOURCE_LABELS[value] || label(value);
+const feedbackLabel = (value) => value === 'accurate' ? 'Good' : value === 'major_edits' ? 'Needs Work' : label(value);
 const displayDate = (value) => value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not completed';
 
 function activityOutcome(activity) {
@@ -62,7 +63,7 @@ export default function ParserActivityPanel({ activities }) {
         <p className="parser-activity-description">{activity.outcome.description}</p>
         <dl className="parser-activity-facts"><div><dt>Workflow state</dt><dd>{text(activity.state)}</dd></div><div><dt>Submitted</dt><dd>{displayDate(activity.submittedAt)}</dd></div><div><dt>Extracted fields</dt><dd>{activity.extractedFields.length ? activity.extractedFields.map(text).join(', ') : 'None recorded'}</dd></div><div><dt>Needs verification</dt><dd>{activity.reviewFields.length ? activity.reviewFields.map(text).join(', ') : 'None recorded'}</dd></div></dl>
         <details><summary>View parser details</summary><div className="parser-activity-details"><div><strong>Sources</strong>{activity.sources.length ? <ul>{activity.sources.map((source, index) => <li key={`${activity.id}-${index}`}><span>{source.filename || sourceLabel(source.type)}</span><small>{label(source.status)}{source.mimeType ? ` · ${source.mimeType}` : ''}</small>{source.warnings.map((warning, warningIndex) => <p key={`${warningIndex}-${warning}`}>{warning}</p>)}</li>)}</ul> : <p>No source record was retained.</p>}</div><div><strong>Parser</strong><p>{activity.provider || 'Not recorded'}{activity.parserVersion ? ` · ${activity.parserVersion}` : ''}</p>{activity.reviewReasons.map((reason) => <p key={reason}>{reason}</p>)}</div></div></details>
-        <div className="parser-activity-feedback"><strong>Parser review</strong>{activity.feedback ? <><span>{text(activity.feedback.rating)}</span><p>{activity.feedback.note || 'No written description was provided.'}</p>{activity.feedback.issueFields.length ? <small>Fields marked: {activity.feedback.issueFields.map(text).join(', ')}</small> : null}</> : <p>No parser feedback was submitted for this attempt.</p>}</div>
+        <div className="parser-activity-feedback"><strong>Parser Quality Feedback</strong>{activity.feedback ? <><span>{feedbackLabel(activity.feedback.rating)}</span><p>{activity.feedback.note || 'No written description was provided.'}</p>{activity.feedback.issueFields.length ? <small>Fields marked: {activity.feedback.issueFields.map(text).join(', ')}</small> : null}</> : <p>No parser feedback was submitted for this attempt.</p>}</div>
       </article>)}</div>}
     </div>
   </details>;

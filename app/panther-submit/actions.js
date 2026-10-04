@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, canSubmit, isSuperAdmin } from '../../lib/auth';
+import { getViewer, canSubmit } from '../../lib/auth';
 import { createServerSupabaseClient, isDemoMode } from '../../lib/supabaseServerClient';
 import { validateSubmission } from '../../lib/validation';
 import { notifyOperationalEvent } from '../../lib/notifications';
@@ -490,7 +490,7 @@ export async function finalizeIntakeAction(input) {
     const { error: suggestionError } = await supabase.from('field_suggestions').insert(suggestionRows);
     if (suggestionError) {
       await supabase.from('intake_sessions').update({ state: 'failed' }).eq('id', session.id);
-      return { ok: false, error: 'Parser evidence could not be saved. The submission has not been finalized.' };
+      return { ok: false, error: 'The submission details could not be saved. Please try again.' };
     }
   }
 
@@ -534,7 +534,7 @@ const FEEDBACK_ISSUES = new Set(['title', 'date', 'time', 'location', 'organizat
 export async function saveParserFeedbackAction(input) {
   try {
     const viewer = await getViewer();
-    if (!viewer.user || !isSuperAdmin(viewer)) return { ok: false, error: 'Super Admin access required.' };
+    if (!viewer.user || !canSubmit(viewer)) return { ok: false, error: 'Active contributor access required.' };
     if (!FEEDBACK_RATINGS.has(input?.rating)) return { ok: false, error: 'Choose a feedback rating.' };
     const issueFields = [...new Set(Array.isArray(input?.issueFields) ? input.issueFields : [])];
     if (issueFields.some((field) => !FEEDBACK_ISSUES.has(field))) return { ok: false, error: 'Choose valid issue fields.' };

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getOpportunity } from '../../../lib/data';
 import CalendarActions from '../../../components/CalendarActions';
+import ApplyAsapReminder from '../../../components/ApplyAsapReminder';
 import EngagementTracker, { TrackedExternalLink } from '../../../components/EngagementTracker';
 import ReportIssueForm from '../../../components/ReportIssueForm';
 import { deadlineLabel, normalizeOpportunityClassifications, opportunityCompensationLabel } from '../../../lib/opportunityOptions';
@@ -77,6 +78,7 @@ export default async function OpportunityDetail({ params }) {
           </SideCard>
 
           {o.deadline && <SideCard title="Deadline reminder" className="opportunity-side-card">
+            <p className="text-xs text-slate mb-3">Add Deadline to Calendar</p>
             <CalendarActions
               id={o.id}
               contentType="opportunity"
@@ -88,6 +90,7 @@ export default async function OpportunityDetail({ params }) {
               kind="deadline"
             />
           </SideCard>}
+          {!o.deadline && o.deadline_type === 'rolling' && <SideCard title="Application reminder" className="opportunity-side-card"><ApplyAsapReminder opportunity={{id:o.id,title:o.title,org:o.org,link:o.link,hubUrl:`https://hub.codepv.org/opportunities/${o.id}`}} /></SideCard>}
 
           <SideCard title={isPvamuContact ? 'PVAMU Contact' : 'Organization contact'} className="opportunity-side-card">
             {o.contact_name && <div className="text-sm font-medium">{o.contact_name}</div>}

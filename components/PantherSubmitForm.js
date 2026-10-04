@@ -43,7 +43,6 @@ const RELATIONSHIP_STORAGE = {
 };
 
 const APPROVED_ORGANIZATIONS = [
-  'Roy G. Perry College of Engineering',
   ...REGISTERED_EVENT_ORGANIZATIONS.map((organization) => organization.label),
 ];
 
@@ -80,27 +79,6 @@ const FIELD_LABELS = {
   presenterAffiliation: 'Presenter affiliation',
   presenter_name: 'Presenter name',
   presenter_affiliation: 'Presenter affiliation',
-};
-
-const EXTRACTION_STATUS_LABELS = {
-  success: 'Automatic extraction completed',
-  fallback: 'Manual-entry fallback used',
-};
-
-const EXTRACTION_REASON_LABELS = {
-  access_denied: 'The extraction service denied access.',
-  demo_mode: 'Automatic extraction is disabled in demo mode.',
-  invalid_request: 'The extraction request was invalid.',
-  malformed_response: 'The extraction service returned an unreadable response.',
-  not_configured: 'The extraction service is not configured.',
-  oversized_input: 'The source was too large to process.',
-  provider_unavailable: 'The extraction service was unavailable or rejected its credentials.',
-  rate_limited: 'The extraction request was rate limited.',
-  remote_source_unavailable: 'The securely uploaded source was unavailable.',
-  source_unavailable: 'The source could not be retrieved for extraction.',
-  throttled: 'The extraction service temporarily throttled the request.',
-  timeout: 'The extraction request timed out.',
-  unsupported_input: 'The source format could not be processed.',
 };
 
 function emptyFields(viewer, type) {
@@ -164,19 +142,9 @@ async function validateClientFile(file) {
   }
 }
 
-const FEEDBACK_RATINGS = [
-  ['accurate', 'Accurate'],
-  ['minor_edits', 'Needed minor edits'],
-  ['major_edits', 'Needed major edits'],
-  ['failed', 'Extraction failed'],
-];
-const FEEDBACK_ISSUES = [
-  ['title', 'Title'], ['date', 'Date'], ['time', 'Time'], ['location', 'Location'],
-  ['organization', 'Organization'], ['contact', 'Contact'], ['deadline', 'Deadline'],
-  ['source_link', 'Source link'], ['description', 'Description'], ['other', 'Other'],
-];
+const FEEDBACK_RATINGS = [['accurate', 'Good'], ['major_edits', 'Needs work']];
 
-export default function PantherSubmitForm({ viewer, feedbackEnabled = true, initialContentType = '' }) {
+export default function PantherSubmitForm({ viewer, approvedOrganizations = [], initialContentType = '' }) {
   const router = useRouter();
   const [step, setStep] = useState(initialContentType ? 2 : 1);
   const [contentType, setContentType] = useState(initialContentType);
@@ -204,7 +172,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
   const [preparedIntake, setPreparedIntake] = useState(null);
 
   const combinedBytes = useMemo(() => artifacts.reduce((sum, artifact) => sum + artifact.file.size, 0), [artifacts]);
-  const canViewTechnical = viewer.role?.role === 'super_admin';
+  const organizationOptions = useMemo(() => [...new Set([...APPROVED_ORGANIZATIONS, ...approvedOrganizations])].sort((a,b)=>a.localeCompare(b)), [approvedOrganizations]);
   const hasExtractedDetails = useMemo(() => {
     if (!parseResult) return false;
     const extractedFields = Object.values(parseResult.fields || {}).some((value) => String(value || '').trim());
@@ -472,9 +440,13 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
         onProgress: setProgress,
       });
       const parsedResult = toSubmissionParserResult(extraction);
-      const result = canViewTechnical ? parsedResult : { ...parsedResult, technical: {} };
+      const result = { ...parsedResult, technical: {} };
       setParseResult(result);
-      if (result.fields.organization) setOrganizationChoice(APPROVED_ORGANIZATIONS.includes(result.fields.organization) ? result.fields.organization : 'other');
+      if (result.fields.organization) {
+        const extractedOrganization = result.fields.organization;
+        const institutionalHost = /university|college|department|school|campus|office/i.test(extractedOrganization);
+        setOrganizationChoice(organizationOptions.includes(extractedOrganization) ? extractedOrganization : institutionalHost ? 'institution' : 'other');
+      }
       const extractedClassifications = normalizeOpportunityClassifications(result.tags.classifications);
       const extractedEligibility = result.fields.eligibility
         || result.tags.qualifications.join('; ')
@@ -616,10 +588,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
       setFeedbackSaving(true);
       const result = await saveParserFeedbackAction({ intakeSessionId: submittedIntakeId, ...feedback });
       setFeedbackSaving(false);
-      setFeedbackStatus(result.ok ? 'Thank you. Your optional parser feedback was saved.' : (result.error || 'Feedback was not saved. Your submission is still complete.'));
-    }
-    function toggleFeedbackIssue(field) {
-      setFeedback((current) => ({ ...current, issueFields: current.issueFields.includes(field) ? current.issueFields.filter((item) => item !== field) : [...current.issueFields, field] }));
+      setFeedbackStatus(result.ok ? 'Thank you. Your optional feedback was saved.' : (result.error || 'Feedback was not saved. Your submission is still complete.'));
     }
     return (
       <div className="max-w-2xl mx-auto mt-16 bg-white border border-line rounded-2xl p-8">
@@ -630,19 +599,16 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
         </p>
         <p className="text-sm text-slate mt-2">You can return to check its status. A reviewer may ask you to correct missing or unclear information.</p>
         <div className="submission-success-actions"><a href="/panther-submit/submissions" className="outline-button">View submission status</a><a href="/panther-submit" className="gold-button">Submit another</a></div>
-        {feedbackEnabled && <form onSubmit={saveFeedback} className="parser-feedback mt-6 border-t border-line pt-5">
-          <h2 className="font-display text-lg text-purple-900">Optional: parser quality feedback</h2>
-          <p className="text-xs text-slate mt-1">Super Admin feedback helps us improve extraction. Note what the parser handled well, what it missed, or what required manual correction. This does not change your completed submission.</p>
+        <form onSubmit={saveFeedback} className="parser-feedback parser-feedback-compact mt-6 border-t border-line pt-5">
+          <h2 className="font-display text-lg text-purple-900">How accurate were the suggested details?</h2>
+          <p className="text-xs text-slate mt-1">Optional feedback helps improve future suggestions and does not change your completed submission.</p>
           <fieldset className="mt-4"><legend className="text-sm font-medium">Overall result</legend><div className="flex flex-wrap gap-2 mt-2">
             {FEEDBACK_RATINGS.map(([value, label]) => <label key={value} className="chip"><input type="radio" name="parser-rating" value={value} checked={feedback.rating === value} onChange={() => setFeedback((current) => ({ ...current, rating: value }))} /> {label}</label>)}
           </div></fieldset>
-          <fieldset className="mt-4"><legend className="text-sm font-medium">What needed attention? <span className="text-slate font-normal">(choose any)</span></legend><div className="flex flex-wrap gap-2 mt-2">
-            {FEEDBACK_ISSUES.map(([value, label]) => <label key={value} className="chip"><input type="checkbox" checked={feedback.issueFields.includes(value)} onChange={() => toggleFeedbackIssue(value)} /> {label}</label>)}
-          </div></fieldset>
-          <label className="parser-feedback-note"><span>What it handled well / where it struggled <small>(optional, 500 characters)</small></span><textarea rows={5} maxLength={500} value={feedback.note} onChange={(event) => setFeedback((current) => ({ ...current, note: event.target.value }))} placeholder="Describe what worked, what was missed, or what needed correction. Do not paste private source text." /></label>
+          <label className="parser-feedback-note"><span>Tell us what was missed <small>(optional)</small></span><textarea rows={3} maxLength={500} value={feedback.note} onChange={(event) => setFeedback((current) => ({ ...current, note: event.target.value }))} placeholder="Short note — do not paste private source text." /></label>
           <button className="gold-button mt-4" type="submit" disabled={!feedback.rating || feedbackSaving}>{feedbackSaving ? 'Saving…' : 'Send optional feedback'}</button>
           {feedbackStatus && <p className="text-xs text-slate mt-3" role="status" aria-live="polite">{feedbackStatus}</p>}
-        </form>}
+        </form>
       </div>
     );
   }
@@ -693,7 +659,7 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
                 {RELATIONSHIPS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
               </select>
             </label>
-            {relationship && <RelationshipFields relationship={relationship} referral={referral} updateReferral={updateReferral} reporterEmail={viewer.user?.email || ''} />}
+            {relationship && <RelationshipFields organizations={organizationOptions} relationship={relationship} referral={referral} updateReferral={updateReferral} reporterEmail={viewer.user?.email || ''} />}
           </section>
 
           {contentType !== 'announcement' && <>
@@ -788,9 +754,9 @@ export default function PantherSubmitForm({ viewer, feedbackEnabled = true, init
                   <Input label={contentType === 'opportunity' && fields.workMode && fields.workMode !== 'Remote' ? 'Location (required)' : 'Location'} required={contentType === 'opportunity' && Boolean(fields.workMode) && fields.workMode !== 'Remote'} value={fields.location} onChange={(value) => updateField('location', value)} />
                   <Input label={contentType === 'event' ? 'Registration link' : 'Application link'} type="url" required={contentType === 'opportunity'} value={fields.link} onChange={(value) => updateField('link', value)} />
                 </div>
-                {contentType === 'event' && <section className="submission-identity-section mt-5" aria-labelledby="confirm-organizer-title">
+                  {contentType === 'event' && <section className="submission-identity-section mt-5" aria-labelledby="confirm-organizer-title">
                   <div className="eyebrow" id="confirm-organizer-title">Event host</div>
-                  <div className="mt-4"><OrganizationSelect choice={organizationChoice} setChoice={setOrganizationChoice} value={fields.org} onChange={(value) => updateField('org', value)} /></div>
+                  <div className="mt-4"><OrganizationSelect organizations={organizationOptions} choice={organizationChoice} setChoice={setOrganizationChoice} value={fields.org} onChange={(value) => updateField('org', value)} /></div>
                 </section>}
                 {contentType === 'opportunity' && <div className="grid md:grid-cols-2 gap-4 mt-4"><label><span className="text-sm font-medium block mb-1.5">Work format</span><select className="input" value={fields.workMode} onChange={(event) => updateField('workMode', event.target.value)}><option value="">Not specified</option>{WORK_MODES.map((value) => <option key={value}>{value}</option>)}</select></label><label><span className="text-sm font-medium block mb-1.5">Compensation <span className="text-coral">*</span></span><select required className="input" value={fields.compensationType} onChange={(event) => { updateField('compensationType', event.target.value); updateField('paid', event.target.value === 'Paid'); }}><option value="" disabled>Select compensation</option>{COMPENSATION_TYPES.map((value) => <option key={value}>{value}</option>)}</select></label></div>}
                 <div className="mt-5"><div className="text-sm font-medium mb-2">Eligible majors</div><div className="flex flex-wrap gap-2">{MAJORS.map((major) => <button type="button" key={major} onClick={() => toggleMajor(major)} className={`text-xs rounded-full px-3 py-1.5 border ${fields.majors.includes(major) ? 'bg-purple-900 text-white border-purple-900' : 'border-line'}`}>{major}</button>)}</div></div>
@@ -853,22 +819,23 @@ function Notice({ children }) {
   return <div className="bg-gold-100 text-ink border border-gold-400 rounded-lg p-3 text-sm mb-3">{children}</div>;
 }
 
-function OrganizationSelect({ choice, setChoice, value, onChange }) {
+function OrganizationSelect({ organizations = APPROVED_ORGANIZATIONS, choice, setChoice, value, onChange }) {
   function changeChoice(nextChoice) {
     setChoice(nextChoice);
-    onChange(nextChoice === 'other' ? '' : nextChoice);
+    onChange(nextChoice === 'institution' || nextChoice === 'other' ? '' : nextChoice);
   }
   return <div>
-    <label className="block"><span className="text-sm font-medium block mb-1.5">Hosting organization <span className="text-coral">*</span></span><select className="input" required value={choice} onChange={(event) => changeChoice(event.target.value)}><option value="">Choose an organization</option>{APPROVED_ORGANIZATIONS.map((organization) => <option key={organization} value={organization}>{organization}</option>)}<option value="other">Other / Not listed</option></select></label>
-    {choice === 'other' && <div className="mt-3"><Input label="Organization name" required value={value} onChange={onChange} placeholder="Enter the full official organization name" /></div>}
+    <label className="block"><span className="text-sm font-medium block mb-1.5">Event host <span className="text-coral">*</span></span><select className="input" required value={choice} onChange={(event) => changeChoice(event.target.value)}><option value="">Choose the event host</option>{organizations.map((organization) => <option key={organization} value={organization}>{organization}</option>)}<option value="institution">Department, college, or university</option><option value="other">Company, employer, or other host</option></select></label>
+    {choice === 'institution' && <div className="mt-3"><Input label="Department, college, or university name" required value={value} onChange={onChange} placeholder="Enter the full official host name" /></div>}
+    {choice === 'other' && <div className="mt-3"><Input label="Host name" required value={value} onChange={onChange} placeholder="Enter the full official host name" /></div>}
   </div>;
 }
 
-function RelationshipFields({ relationship, referral, updateReferral, reporterEmail = '' }) {
+function RelationshipFields({ organizations = APPROVED_ORGANIZATIONS, relationship, referral, updateReferral, reporterEmail = '' }) {
   if (relationship === 'student_organization') return <div className="grid md:grid-cols-2 gap-4 mt-4">
-    <label><span className="text-sm font-medium block mb-1.5">Registered student organization <span className="text-coral">*</span></span><select className="input" required value={referral.organization} onChange={(event) => updateReferral('organization', event.target.value)}><option value="">Choose an organization</option>{REGISTERED_EVENT_ORGANIZATIONS.map((organization) => <option key={organization.value} value={organization.label}>{organization.label}</option>)}</select></label>
+    <label><span className="text-sm font-medium block mb-1.5">Registered student organization <span className="text-coral">*</span></span><select className="input" required value={referral.organization} onChange={(event) => updateReferral('organization', event.target.value)}><option value="">Choose an organization</option>{organizations.map((organization) => <option key={organization} value={organization}>{organization}</option>)}</select></label>
     <Input label="Your role" required value={referral.title} onChange={(value) => updateReferral('title', value)} placeholder="President, officer, member, adviser" />
-    <div className="md:col-span-2"><ReportIssueForm label="Report / request an organization addition" defaultIssueType="Organization addition request" defaultReporterEmail={reporterEmail} /></div>
+    <div className="md:col-span-2"><ReportIssueForm label="Can’t find your organization? Request it." organizationRequest defaultReporterEmail={reporterEmail} /></div>
   </div>;
   if (relationship === 'faculty_staff' || relationship === 'department_college') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label={relationship === 'faculty_staff' ? 'Department / office' : 'Department / college'} required value={referral.organization} onChange={(value) => updateReferral('organization', value)} /><Input label="Position or role" required value={referral.title} onChange={(value) => updateReferral('title', value)} /></div>;
   if (relationship === 'alumni') return <div className="grid md:grid-cols-2 gap-4 mt-4"><Input label="Graduation year (optional)" value={referral.graduationYear} onChange={(value) => updateReferral('graduationYear', value)} /><Input label="Current organization / company (optional)" value={referral.organization} onChange={(value) => updateReferral('organization', value)} /></div>;

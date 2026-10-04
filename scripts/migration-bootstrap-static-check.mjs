@@ -46,6 +46,12 @@ const expectedOrder = [
   '20260929200810_repair_submission_status_dashboard.sql',
   '20260929204959_structure_organization_addition_requests.sql',
   '20260929212940_homepage_announcement_highlight_control.sql',
+  '20261002205205_restrict_contributor_approvals_to_admins.sql',
+  '20261002214500_align_organization_request_validation.sql',
+  '20261003133848_final_v1_uat_notifications_and_lifecycle.sql',
+  '20261004130119_reviewer_submission_identity.sql',
+  '20261004130844_repair_reviewer_submission_identity.sql',
+  '20261004135624_separate_organization_taxonomy.sql',
 ];
 
 assert.deepEqual(migrationNames, expectedOrder, 'Migration filenames or ordering changed');
@@ -87,6 +93,7 @@ const submissionClarity = readMigration('20260928134549_submission_clarity_and_s
 const submissionStatusRepair = readMigration('20260929200810_repair_submission_status_dashboard.sql');
 const organizationRequestStructure = readMigration('20260929204959_structure_organization_addition_requests.sql');
 const homepageAnnouncementHighlight = readMigration('20260929212940_homepage_announcement_highlight_control.sql');
+const organizationTaxonomy = readMigration('20261004135624_separate_organization_taxonomy.sql');
 
 for (const table of ['user_roles', 'opportunities', 'events', 'announcements']) {
   assert.match(baseline, new RegExp(`create table ${table}\\s*\\(`), `Baseline does not create ${table}`);
@@ -256,5 +263,7 @@ for (const control of [
   'revoke all on function public.validate_issue_report_request_details()',
 ]) assert.ok(organizationRequestStructure.includes(control), `Organization-request structure control missing: ${control}`);
 assert.doesNotMatch(organizationRequestStructure, /drop\s+table|truncate|delete\s+from|grant\s+all|security\s+definer/i, 'Organization-request structure must preserve data and avoid privileged code');
+for (const control of ['taxonomy_scope', "'Council of Distinguished Engineers'", "'organization','affiliation','employer','other'", 'public reads active organization taxonomy']) assert.ok(organizationTaxonomy.includes(control), `Organization taxonomy control missing: ${control}`);
+assert.doesNotMatch(organizationTaxonomy, /drop\s+table|truncate|delete\s+from|grant\s+all/i, 'Organization taxonomy migration must preserve history and least privilege');
 
 console.log(`Migration bootstrap static checks passed: ${migrationNames.length} ordered migrations with a complete baseline.`);

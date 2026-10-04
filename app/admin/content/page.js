@@ -6,7 +6,7 @@ import RecommendationAdmin from './RecommendationAdmin';
 import { getFeatureRecommendations } from '../../../lib/recommendationData';
 import { getContentEditAudit } from '../../../lib/auditData';
 
-const MANAGED_STATUSES = ['pending', 'resubmitted', 'needs_correction', 'published', 'rejected', 'unpublished', 'archived', 'deleted'];
+const MANAGED_STATUSES = ['pending', 'resubmitted', 'needs_correction', 'published', 'rejected', 'unpublished', 'archived', 'deleted', 'expired_before_review'];
 const CONTENT_TABLES = [
   ['events', 'event', 'events_submitted_by_fkey'],
   ['opportunities', 'opportunity', 'opportunities_submitted_by_fkey'],
@@ -53,7 +53,7 @@ export default async function ContentPage() {
 
   const superAdmin = isSuperAdmin(viewer);
   const [contentRows, auditEdits, recommendations] = await Promise.all([
-    rows(superAdmin),
+    rows(true),
     getContentEditAudit(),
     getFeatureRecommendations(),
   ]);
@@ -76,6 +76,6 @@ export default async function ContentPage() {
       </section>
       <RecommendationAdmin rows={recommendations} featured={featured} />
     </div>
-    <ContentManager rows={contentRows} auditEdits={auditEdits} superAdmin={superAdmin} />
+    <ContentManager rows={contentRows} auditEdits={auditEdits} superAdmin={superAdmin} availabilityAccess />
   </div>;
 }

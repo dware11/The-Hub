@@ -9,6 +9,14 @@ function rowDate(row) {
 
 const humanize = value => String(value || 'system action').replace(/^content_/, '').replace(/^home_/, 'home ').replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 const actorName = row => row.actor?.full_name || row.actor?.email || (row.actor_type === 'system' ? 'System' : 'Former workspace user');
+const changeValue = value => {
+  if (value === null || value === undefined || value === '') return 'Not recorded';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.map(changeValue).join(', ');
+  if (typeof value === 'object') return Object.entries(value).map(([key, item]) => `${humanize(key)}: ${changeValue(item)}`).join(' · ');
+  return String(value);
+};
+const readableChanges = changes => Object.entries(changes || {}).filter(([key]) => key !== 'id' && !key.endsWith('_id'));
 
 export default function HistoryBrowser({ rows, demo }) {
   const [search, setSearch] = useState('');
@@ -61,6 +69,6 @@ export default function HistoryBrowser({ rows, demo }) {
     </div>
     {demo && <p className="workspace-status" role="status">Demo mode: no audit rows are fabricated. Live audit history appears after Supabase is configured.</p>}
     {filtered.length ? <div className="history-table">{filtered.map((row) => <button type="button" className="history-row" key={row.id} onClick={() => setSelected(row)}><div><div className="eyebrow">{humanize(row.action)} · {humanize(row.content_type)}</div><strong>{row.target_title || row.reason || humanize(row.action)}</strong><small>{rowDate(row)?.toLocaleString() || 'Timestamp unavailable'}</small></div><div><span>{actorName(row)}</span><span>{humanize(row.actor?.role || row.actor_type)}</span></div></button>)}</div> : <div className="workspace-empty">{demo ? 'No demo audit history is displayed.' : 'No audit events match these filters.'}</div>}
-    {selected && <dialog open className="history-dialog" aria-labelledby="history-detail-title" onKeyDown={event => { if (event.key === 'Escape') setSelected(null); }}><div className="history-dialog-card"><button type="button" className="history-dialog-close" aria-label="Close history detail" onClick={() => setSelected(null)}>×</button><div className="eyebrow">Audit event</div><h2 id="history-detail-title">{humanize(selected.action)}</h2><dl><dt>Actor</dt><dd>{actorName(selected)}</dd><dt>Role</dt><dd>{humanize(selected.actor?.role || selected.actor_type)}</dd><dt>Time</dt><dd>{rowDate(selected)?.toLocaleString() || 'Unavailable'}</dd><dt>Object</dt><dd>{selected.target_title || humanize(selected.content_type)}</dd><dt>Action</dt><dd>{humanize(selected.action)}</dd>{selected.previous_status && <><dt>Previous</dt><dd>{humanize(selected.previous_status)}</dd></>}{selected.new_status && <><dt>New</dt><dd>{humanize(selected.new_status)}</dd></>}{selected.reason && <><dt>Reason</dt><dd>{selected.reason}</dd></>}</dl>{selected.changes && Object.keys(selected.changes).length > 0 && <details><summary>Changed fields</summary><pre>{JSON.stringify(selected.changes, null, 2)}</pre></details>}<small>Related audit event: {selected.id}</small></div></dialog>}
+    {selected && <dialog open className="history-dialog" aria-labelledby="history-detail-title" onKeyDown={event => { if (event.key === 'Escape') setSelected(null); }}><div className="history-dialog-card"><button type="button" className="history-dialog-close" aria-label="Close history detail" onClick={() => setSelected(null)}>×</button><div className="eyebrow">Audit event</div><h2 id="history-detail-title">{humanize(selected.action)}</h2><dl><dt>Actor</dt><dd>{actorName(selected)}</dd><dt>Role</dt><dd>{humanize(selected.actor?.role || selected.actor_type)}</dd><dt>Time</dt><dd>{rowDate(selected)?.toLocaleString() || 'Unavailable'}</dd><dt>Object</dt><dd>{selected.target_title || humanize(selected.content_type)}</dd><dt>Action</dt><dd>{humanize(selected.action)}</dd>{selected.previous_status && <><dt>Previous</dt><dd>{humanize(selected.previous_status)}</dd></>}{selected.new_status && <><dt>New</dt><dd>{humanize(selected.new_status)}</dd></>}{selected.reason && <><dt>Reason</dt><dd>{selected.reason}</dd></>}</dl>{readableChanges(selected.changes).length > 0 && <details><summary>Changed fields</summary><dl className="history-change-list">{readableChanges(selected.changes).map(([key, value]) => <div key={key}><dt>{humanize(key)}</dt><dd>{changeValue(value)}</dd></div>)}</dl></details>}</div></dialog>}
   </section>;
 }

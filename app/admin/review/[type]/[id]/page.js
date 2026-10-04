@@ -1,18 +1,19 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { getViewer, canReview, isSuperAdmin } from '../../../../../lib/auth';
+import { notFound, redirect } from 'next/navigation';
+import { getViewer, canReview } from '../../../../../lib/auth';
 import { getPendingQueue } from '../../../../../lib/adminData';
 import ReviewSubmission from './ReviewSubmission';
 
 export default async function ReviewSubmissionPage({ params }) {
   const viewer = await getViewer();
-  if (!viewer.user || !canReview(viewer)) return <div className="workspace-auth-card"><h1>Reviewer access required</h1><p>This submission is restricted to approved reviewers.</p></div>;
+  if (!viewer.user) redirect('/auth/signin?next=%2Fadmin%2Freview');
+  if (!canReview(viewer)) redirect('/workspace');
   const { type, id } = await params;
   const key = type === 'opportunity' ? 'opportunities' : type === 'event' ? 'events' : type === 'announcement' ? 'announcements' : null;
   if (!key) return notFound();
-  const showTechnical = isSuperAdmin(viewer);
-  const queue = await getPendingQueue({ includeTechnical: showTechnical });
+  const queue = await getPendingQueue();
   const item = queue[key].find(row => row.id === id);
   if (!item) return notFound();
-  return <div className="workspace-overview review-submission-page"><div className="review-submission-breadcrumb"><Link href="/admin/review">Review Queue</Link> / Review Submission</div><div className="workspace-page-heading"><div><div className="eyebrow">{type} · Pending review</div><h1>Review Submission</h1><p>Verify the submitted information against its official source before deciding.</p></div></div><ReviewSubmission item={item} type={type} showTechnical={showTechnical} /></div>;
+  const ownSubmission = Boolean(item.own_submission);
+  return <div className="workspace-overview review-submission-page"><div className="review-submission-breadcrumb"><Link href="/admin/review">Review Queue</Link> / Review Submission</div><div className="workspace-page-heading"><div><div className="eyebrow">{type} · Pending review</div><h1>Review Submission</h1><p>Verify the submitted information against its official source before deciding.</p></div></div><ReviewSubmission item={item} type={type} ownSubmission={ownSubmission} /></div>;
 }

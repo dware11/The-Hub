@@ -15,6 +15,12 @@ const digestRoute = read('app/api/cron/weekly-digest/route.js');
 const bootstrap = read('supabase/bootstrap/first_super_admin.sql');
 const selfReviewHardening = read('supabase/migrations/20260908184025_prevent_reviewer_self_review.sql');
 const roleManagementRepair = read('supabase/migrations/20260923142441_repair_manage_user_role_authorization.sql');
+const contributorApprovalRepair = read('supabase/migrations/20261002205205_restrict_contributor_approvals_to_admins.sql');
+const committeePage = read('app/admin/committee/page.js');
+const committeeActions = read('app/admin/committee/actions.js');
+const desktopNav = read('components/DesktopNavMenus.js');
+const mobileNav = read('components/MobileNav.js');
+const workspaceNav = read('components/WorkspaceNavigation.js');
 
 assert.match(auth, /export function canSubmit[\s\S]*\['super_admin', 'admin', 'reviewer', 'contributor'\]/);
 assert.match(auth, /export function canReview[\s\S]*\['super_admin', 'admin', 'reviewer'\]/);
@@ -38,7 +44,8 @@ assert.match(digestRoute, /auth !== `Bearer \$\{cronSecret\}`/);
 assert.match(signIn, /auth\/signin/);
 assert.doesNotMatch(signIn, /provider: 'azure'|offline_access|graph|calendar/i);
 assert.match(read('components/EmailSignInForm.js'), /signInWithOtp/);
-assert.match(read('app/auth/confirm/verify/route.js'), /verifyOtp/);
+assert.match(read('components/EmailSignInForm.js'), /verifyOtp\(\{email,token,type:'email'\}\)/);
+assert.match(read('app/auth/confirm/page.js'), /redirect\(signInUrl\)/);
 
 for (const required of [
   'auth_user_id uuid',
@@ -94,5 +101,19 @@ assert.match(roleManagementRepair, /set search_path = ''/);
 assert.match(roleManagementRepair, /revoke all on function public\.manage_user_role\(uuid, text, text\)[\s\S]*from public, anon, authenticated/);
 assert.match(roleManagementRepair, /grant execute on function public\.manage_user_role\(uuid, text, text\)[\s\S]*to authenticated/);
 assert.doesNotMatch(roleManagementRepair, /grant\s+all|service_role/i);
+
+assert.match(committeePage, /isAdmin\(viewer\)/);
+assert.doesNotMatch(committeePage, /canReview\(viewer\)/);
+assert.match(committeeActions, /isAdmin\(viewer\)/);
+assert.doesNotMatch(committeeActions, /canReview\(viewer\)/);
+for (const navSource of [desktopNav, mobileNav, workspaceNav]) assert.match(navSource, /Contributor Approvals/);
+assert.match(desktopNav, /\{admin && <>[\s\S]*Contributor Approvals/);
+assert.match(mobileNav, /\{admin && <>[\s\S]*Contributor Approvals/);
+assert.match(workspaceNav, /Contributor Approvals'[\s\S]*adminOnly: true/);
+assert.match(contributorApprovalRepair, /using \(public\.is_admin\(\)\)/);
+assert.match(contributorApprovalRepair, /if not public\.is_admin\(\) then raise exception 'Administrator access required'/);
+assert.match(contributorApprovalRepair, /role in \('admin','super_admin'\)/);
+assert.match(contributorApprovalRepair, /where public\.is_admin\(\)/);
+assert.doesNotMatch(contributorApprovalRepair, /public\.is_reviewer\(\)/);
 
 console.log('RBAC static checks passed: role matrix, email-auth path, callback allowlist, production guard, migration policies/RPCs, and review path.');

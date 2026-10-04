@@ -7,18 +7,18 @@ import EventFilterControls from './EventFilterControls';
 import { EVENT_FILTERS, eventOrganizations, matchesEventCategories, matchesEventOrganizations, priorityCalendarEvents } from '../lib/eventCategories';
 import { matchesSearch } from '../lib/search';
 
-export default function EventsCalendarBrowser({ events }) {
+export default function EventsCalendarBrowser({ events, approvedOrganizations = [] }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = useMemo(() => searchParams.getAll('category').filter((value) => EVENT_FILTERS.slice(1).includes(value)), [searchParams]);
-  const organizations = useMemo(() => eventOrganizations(events), [events]);
+  const organizations = useMemo(() => eventOrganizations(events, approvedOrganizations), [events, approvedOrganizations]);
   const selectedOrganizations = useMemo(() => searchParams.getAll('organization').filter((value) => organizations.some((item) => item.value === value)), [searchParams, organizations]);
   const search = searchParams.get('q') || '';
   const defaultCurated = selected.length === 0 && selectedOrganizations.length === 0 && !search && events.length > 35;
   const shown = useMemo(
-    () => (defaultCurated ? priorityCalendarEvents(events) : events).filter((event) => matchesEventCategories(event, selected) && matchesEventOrganizations(event, selectedOrganizations) && matchesSearch([event.title,event.org,event.description,event.location], search)),
-    [events, selected, selectedOrganizations, search, defaultCurated]
+    () => (defaultCurated ? priorityCalendarEvents(events) : events).filter((event) => matchesEventCategories(event, selected) && matchesEventOrganizations(event, selectedOrganizations, approvedOrganizations) && matchesSearch([event.title,event.org,event.description,event.location], search)),
+    [events, selected, selectedOrganizations, approvedOrganizations, search, defaultCurated]
   );
 
   function updateCategories(next) {

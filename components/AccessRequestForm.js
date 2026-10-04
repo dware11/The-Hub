@@ -11,7 +11,7 @@ function PendingRequest({ request, onEdit }) {
   return <section className="access-pending-card" aria-labelledby="access-pending-title">
     <span aria-hidden="true">✓</span>
     <div><div className="eyebrow">Request received</div><h2 id="access-pending-title">Contributor access request pending</h2><p>Your request was submitted for review. You’ll be able to submit Hub content after it is approved.</p>
-      <dl><div><dt>Organization / department</dt><dd>{request.organization_department}</dd></div><div><dt>Representation</dt><dd>{REPRESENTATIONS.find(([value]) => value === request.representation_type)?.[1] || request.representation_type}</dd></div><div><dt>Requested submission area</dt><dd>{TARGET_LABELS[request.request_target] || 'General Hub content'}</dd></div><div><dt>Submitted</dt><dd>{submitted}</dd></div></dl>
+      <dl><div><dt>Affiliation</dt><dd>{request.organization_department}</dd></div><div><dt>Representation</dt><dd>{REPRESENTATIONS.find(([value]) => value === request.representation_type)?.[1] || request.representation_type}</dd></div><div><dt>Requested submission area</dt><dd>{TARGET_LABELS[request.request_target] || 'General Hub content'}</dd></div><div><dt>Submitted</dt><dd>{submitted}</dd></div></dl>
       <button type="button" className="outline-button" onClick={onEdit}>Update request details</button>
     </div>
   </section>;
@@ -24,6 +24,13 @@ export default function AccessRequestForm({ viewer, target = 'general', existing
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const external = !String(viewer.user?.email || '').toLowerCase().endsWith('@pvamu.edu') || ['sponsor_company', 'alumni', 'external_organization'].includes(form.representationType);
+  const affiliationLabel = form.representationType === 'student_organization' || form.representationType === 'external_organization'
+    ? 'Organization'
+    : form.representationType === 'sponsor_company'
+      ? 'Company'
+      : form.representationType === 'alumni'
+        ? 'Current affiliation'
+        : 'Department, college, or university office';
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
   async function submit(event) {
@@ -43,7 +50,7 @@ export default function AccessRequestForm({ viewer, target = 'general', existing
   return <form className="access-request-form" onSubmit={submit}>
     <div><div className="eyebrow">Manual approval</div><h2>Request Contributor Access</h2><p>Signed in as <strong>{viewer.user?.email}</strong>. Your Auth account confirms your email; it does not grant a Hub role.</p></div>
     <label>Name<input required autoComplete="name" value={form.name} onChange={event => set('name', event.target.value)} /></label>
-    <label>Organization / department<input required value={form.organization} onChange={event => set('organization', event.target.value)} /></label>
+    <label>{affiliationLabel}<input required value={form.organization} onChange={event => set('organization', event.target.value)} /></label>
     <label>Representation type<select value={form.representationType} onChange={event => set('representationType', event.target.value)}>{REPRESENTATIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     {external && <div className="access-contact-grid"><label>PVAMU contact name<input required value={form.pvamuContactName} onChange={event => set('pvamuContactName', event.target.value)} /></label><label>PVAMU contact email<input required type="email" value={form.pvamuContactEmail} onChange={event => set('pvamuContactEmail', event.target.value)} /></label></div>}
     <label>Submission intent<select value={form.intent} onChange={event => set('intent', event.target.value)}><option value="one_time">One-time submission</option><option value="recurring">Recurring contributor</option></select></label>
