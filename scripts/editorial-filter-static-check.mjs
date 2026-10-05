@@ -6,7 +6,7 @@ assert.match(read('components/EventsCalendar.js'), /current===value\?null:value/
 assert.match(read('components/EventsCalendar.js'), /No events scheduled for this day/);
 assert.match(read('components/EventsAllBrowser.js'), /Search events/);
 assert.match(read('components/EventsAllBrowser.js'), /This Month/);
-assert.match(read('components/EventsAllBrowser.js'), /Hosting organization/);
+assert.match(read('components/EventsAllBrowser.js'), /<span>Organization<\/span>/);
 assert.match(read('components/EventsAllBrowser.js'), /organizations=\{organizations\}/);
 assert.doesNotMatch(read('components/EventsAllBrowser.js'), /category === 'Engineering Student Organizations'/);
 assert.match(read('components/EventsCalendarBrowser.js'), /searchParams\.get\('q'\)/);
@@ -17,7 +17,7 @@ const organizationFixtures = [
   { org: 'Roy G. Perry College of Engineering' },
 ];
 const approvedOrganizations = ['Council of Distinguished Engineers'];
-const organizationOptions = eventOrganizations(organizationFixtures, approvedOrganizations);
+const organizationOptions = eventOrganizations(approvedOrganizations);
 assert.deepEqual(organizationOptions, [{ value: 'Council of Distinguished Engineers', label: 'Council of Distinguished Engineers' }]);
 assert.ok(matchesEventOrganizations({ org: 'Council of Distinguished Engineers (C.O.D.E.)' }, ['Council of Distinguished Engineers'], approvedOrganizations));
 assert.ok(!matchesEventOrganizations({ org: 'Prairie View A&M University' }, ['Council of Distinguished Engineers'], approvedOrganizations));

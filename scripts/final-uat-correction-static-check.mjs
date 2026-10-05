@@ -60,5 +60,5 @@ assert.match(notifications, /View Submission Status/);
 assert.match(notifications, /View Published Listing/);
 assert.match(notifications, /This email was sent because you submitted content to the C\.O\.D\.E\. Engineering Hub/);
 assert.match(notifications, /WORKFLOW_FROM_EMAIL \|\| process\.env\.DIGEST_FROM_EMAIL/);
-assert.match(about, /Submit an Advocacy Request/);
+assert.match(about, /Share a Concern/);
 console.log('Final UAT correction checks passed: lifecycle, reviewer UX, contributor status, parser feedback, reports, reminders, notifications, and advocacy.');

@@ -32,7 +32,8 @@
     "test:final-v1": "node scripts/final-v1-static-check.mjs",
     "test:hosted-deployment": "node scripts/hosted-deployment-check.mjs",
     "test:final-uat": "node scripts/final-uat-correction-static-check.mjs",
-    "test:workflow-email": "node --experimental-vm-modules scripts/workflow-email-render-check.mjs"
+    "test:workflow-email": "node --experimental-vm-modules scripts/workflow-email-render-check.mjs",
+    "test:people-invite": "node --experimental-vm-modules scripts/people-invitation-static-check.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.1136.0",

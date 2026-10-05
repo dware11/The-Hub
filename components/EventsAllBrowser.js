@@ -20,7 +20,7 @@ export default function EventsAllBrowser({ events, approvedOrganizations = [], i
   const [filtersOpen, setFiltersOpen] = useState(Boolean(initialDate));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const organizations = useMemo(() => eventOrganizations(events, approvedOrganizations), [events, approvedOrganizations]);
+  const organizations = useMemo(() => eventOrganizations(approvedOrganizations), [approvedOrganizations]);
   const activeFilterCount = Boolean(category) + organizationsSelected.length + Boolean(specificDate || range !== 'upcoming');
 
   const shown = useMemo(() => {
@@ -56,7 +56,7 @@ export default function EventsAllBrowser({ events, approvedOrganizations = [], i
       <button type="button" className="events-filter-toggle" onClick={() => setFiltersOpen(value => !value)} aria-expanded={filtersOpen}>Filters{activeFilterCount ? ` · ${activeFilterCount} active` : ''}</button>
       <div className={`events-advanced-filters${filtersOpen ? ' is-open' : ''}`}>
         <label><span>Category</span><select value={category} onChange={event => setCategory(event.target.value)}><option value="">All Categories</option>{EVENT_FILTERS.slice(1).map(value => <option key={value}>{value}</option>)}</select></label>
-        <div className="events-organization-filter"><span>Hosting organization</span><OrganizationPicker organizations={organizations} selected={organizationsSelected} onToggle={toggleOrganization} onClear={()=>setOrganizationsSelected([])} /></div>
+        <div className="events-organization-filter"><span>Organization</span><OrganizationPicker organizations={organizations} selected={organizationsSelected} onToggle={toggleOrganization} onClear={()=>setOrganizationsSelected([])} /></div>
         <label><span>Date range</span><select value={range} disabled={Boolean(specificDate)} onChange={event => setRange(event.target.value)}><option value="upcoming">Upcoming</option><option value="month">This Month</option><option value="all">All Time</option></select></label>
         <label><span>Specific date</span><input type="date" value={specificDate} onChange={event => setSpecificDate(event.target.value)} /></label>
         <button type="button" onClick={clear}>Clear Filters</button>
