@@ -160,7 +160,7 @@ export default function ContentManager({ rows, auditEdits = [], superAdmin = fal
           {availabilityAccess && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling' && <><a className="chip" href={row.link} target="_blank" rel="noreferrer">Open application link</a><button className="gold-button" onClick={()=>confirmAvailability(row)}>Confirm still active</button><button className="chip" onClick={()=>setActionTarget({row,action:'archive'})}>Mark closed / archive</button></>}
           {row.status === 'published' && <button className="chip" onClick={() => setActionTarget({ row, action: 'unpublish' })}>Unpublish</button>}
           {['published', 'unpublished'].includes(row.status) && !(availabilityAccess && row.content_type === 'opportunity' && row.status === 'published' && row.deadline_type === 'rolling') && <button className="chip" onClick={() => setActionTarget({ row, action: 'archive' })}>Archive</button>}
-          {EDITABLE_STATUSES.has(row.status) && <button className="chip" onClick={() => setActionTarget({ row, action: 'soft_delete' })}>Move to trash</button>}
+          {row.status !== 'deleted' && <button className="chip" onClick={() => setActionTarget({ row, action: 'soft_delete' })}>Move to trash</button>}
           {row.status === 'deleted' && <button className="gold-button" onClick={() => act(row, 'restore')}>Restore</button>}
           {superAdmin && row.status === 'deleted' && <button className="danger-button" onClick={()=>setDeleteTarget(row)}>Delete permanently</button>}
         </div>

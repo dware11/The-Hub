@@ -2,7 +2,21 @@
 import { revalidatePath } from 'next/cache';
 import { getViewer, isAdmin, isSuperAdmin } from '../../../lib/auth';
 import { createServerSupabaseClient, isDemoMode } from '../../../lib/supabaseServerClient';
-export async function manageContent(type,id,action,changes={}){const viewer=await getViewer();if(!isAdmin(viewer))return{ok:false,error:'Administrator access required'};if(isDemoMode){revalidatePath('/admin/content');return{ok:true,demo:true};}const supabase=await createServerSupabaseClient();const rpc=type==='announcement'&&action==='edit'?'manage_announcement_editorial':'manage_published_content';const args=rpc==='manage_announcement_editorial'?{p_announcement_id:id,p_action:'edit',p_priority:changes.priority||null,p_is_featured:changes.is_featured??null,p_featured_until:changes.featured_until||null,p_expires_at:changes.expires_at||null,p_category:changes.category||null,p_source_url:changes.source_url||null}:{p_content_type:type,p_content_id:id,p_action:action,p_changes:changes};const{data,error}=await supabase.rpc(rpc,args);if(error)return{ok:false,error:error.message};['/admin/content','/','/opportunities','/events','/events/all','/announcements'].forEach(revalidatePath);return{ok:true,data};}
+export async function manageContent(type,id,action,changes={}){
+  const viewer=await getViewer();
+  if(!isAdmin(viewer))return{ok:false,error:'Administrator access required'};
+  if(isDemoMode){revalidatePath('/admin/content');return{ok:true,demo:true};}
+  const supabase=await createServerSupabaseClient();
+  const{data,error}=await supabase.rpc('manage_published_content',{p_content_type:type,p_content_id:id,p_action:action,p_changes:changes});
+  if(error)return{ok:false,error:error.message};
+  if(type==='announcement'&&action==='edit'){
+    const{error:editorialError}=await supabase.rpc('manage_announcement_editorial',{p_announcement_id:id,p_action:'edit',p_priority:changes.priority||null,p_is_featured:changes.is_featured??null,p_featured_until:changes.featured_until||null,p_expires_at:changes.expires_at||null,p_category:changes.category||null,p_source_url:changes.source_url||null});
+    if(editorialError)return{ok:false,error:editorialError.message};
+  }
+  const publicBase=type==='event'?'/events':type==='opportunity'?'/opportunities':'/announcements';
+  ['/admin/content','/',publicBase,`${publicBase}/${id}`].forEach(revalidatePath);
+  return{ok:true,data};
+}
 
 export async function setHomeSpotlight(type,id,isFeatured,rank=1){
   const viewer=await getViewer();
