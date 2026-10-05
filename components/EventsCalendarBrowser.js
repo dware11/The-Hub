@@ -12,7 +12,7 @@ export default function EventsCalendarBrowser({ events, approvedOrganizations = 
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = useMemo(() => searchParams.getAll('category').filter((value) => EVENT_FILTERS.slice(1).includes(value)), [searchParams]);
-  const organizations = useMemo(() => eventOrganizations(events, approvedOrganizations), [events, approvedOrganizations]);
+  const organizations = useMemo(() => eventOrganizations(approvedOrganizations), [approvedOrganizations]);
   const selectedOrganizations = useMemo(() => searchParams.getAll('organization').filter((value) => organizations.some((item) => item.value === value)), [searchParams, organizations]);
   const search = searchParams.get('q') || '';
   const defaultCurated = selected.length === 0 && selectedOrganizations.length === 0 && !search && events.length > 35;

@@ -10,7 +10,6 @@ assert.match(read('components/EventsAllBrowser.js'), /<span>Organization<\/span>
 assert.match(read('components/EventsAllBrowser.js'), /organizations=\{organizations\}/);
 assert.doesNotMatch(read('components/EventsAllBrowser.js'), /category === 'Engineering Student Organizations'/);
 assert.match(read('components/EventsCalendarBrowser.js'), /searchParams\.get\('q'\)/);
-assert.match(read('components/EventsCalendarBrowser.js'), /eventOrganizations\(events, approvedOrganizations\)/);
 const organizationFixtures = [
   { org: 'Council of Distinguished Engineers (C.O.D.E.)' },
   { org: 'Prairie View A&M University' },
@@ -19,6 +18,8 @@ const organizationFixtures = [
 const approvedOrganizations = ['Council of Distinguished Engineers'];
 const organizationOptions = eventOrganizations(approvedOrganizations);
 assert.deepEqual(organizationOptions, [{ value: 'Council of Distinguished Engineers', label: 'Council of Distinguished Engineers' }]);
+assert.match(read('components/EventsCalendarBrowser.js'), /eventOrganizations\(approvedOrganizations\)/);
+assert.doesNotMatch(read('components/EventsCalendarBrowser.js'), /eventOrganizations\(events,/);
 assert.ok(matchesEventOrganizations({ org: 'Council of Distinguished Engineers (C.O.D.E.)' }, ['Council of Distinguished Engineers'], approvedOrganizations));
 assert.ok(!matchesEventOrganizations({ org: 'Prairie View A&M University' }, ['Council of Distinguished Engineers'], approvedOrganizations));
 assert.match(read('components/OpportunitiesBrowser.js'), /Search opportunities/);
