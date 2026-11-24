@@ -1,9 +1,44 @@
+<div align="center">
+
 # C.O.D.E. Engineering Hub
 
-Communications and opportunity platform for the Roy G. Perry College of
-Engineering at Prairie View A&M University — opportunities (internships,
-scholarships, research), a shared events calendar, announcements, and a
-submission portal for verified contributors.
+**The communications and opportunity platform for the Roy G. Perry College of Engineering at Prairie View A&M University.**
+
+[![Live site](https://img.shields.io/badge/Live-hub.codepv.org-4f2683?style=for-the-badge)](https://hub.codepv.org)
+![Next.js](https://img.shields.io/badge/Next.js_14-black?style=for-the-badge&logo=nextdotjs)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres_RLS-3ecf8e?style=for-the-badge&logo=supabase&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-deployed-black?style=for-the-badge&logo=vercel)
+
+</div>
+
+---
+
+## Why it exists
+
+Engineering students at PVAMU were missing internships, scholarships, research openings, and events because the information was scattered across email blasts, flyers, and group chats. As President of **C.O.D.E. (Council of Distinguished Engineers)**, the Dean's Student Advisory Board, I built the Hub to put it all in one trusted place that students actually check.
+
+**It's in production at [hub.codepv.org](https://hub.codepv.org).**
+
+## What it does
+
+| For students | For contributors & reviewers |
+| --- | --- |
+| Browse **opportunities** (internships, scholarships, research) with deadline-aware "closing this week" views | Submit opportunities and events through **Panther Submit**, with flyer OCR that pre-fills fields |
+| A shared **events calendar** with one-click add-to-calendar | **Review queue** with confidence scores and signed, time-limited links to private source files |
+| College **announcements** and a weekly **email digest** | **Admin console**: content, people, committee, analytics, audit history, and system health |
+| Passwordless email sign-in | Role-based access enforced in the database with Postgres **Row Level Security** |
+
+## Engineering highlights
+
+- **Security in the database layer.** Authorization lives in Postgres RLS policies (`is_admin()`, `is_verified_contributor()`) across a versioned migration history, not just in UI checks.
+- **Privacy-safe analytics.** Only daily aggregate counts are stored: no IPs, account IDs, user agents, cookies, or exact timestamps.
+- **Private intake pipeline.** Uploaded flyers stay private, and reviewers get 10-minute signed URLs. Parser feedback stores ratings only, never document text.
+- **Swappable parser contract.** `parseFlyer()` returns a fixed field shape, so the free Tesseract.js + regex extractor can be upgraded to a vision LLM without touching the UI.
+- **Operational automation.** A weekly Resend digest, `pg_cron` auto-archiving of expired items, and health and audit views for admins.
+
+---
+
+# Developer setup
 
 Runs in **demo mode only when both demo flags are explicitly enabled**
 (sample data and a simulated signed-in admin). Production must set both
